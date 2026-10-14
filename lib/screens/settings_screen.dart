@@ -129,8 +129,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     runSpacing: 8,
                     children: [
                       ActionChip(
+                        avatar: const Icon(Icons.radar, size: 14, color: Color(0xFF10B981)),
+                        backgroundColor: const Color(0xFF1E3A5F),
+                        label: const Text('Auto-Detect Server', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                        onPressed: () async {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Scanning candidate server addresses...')),
+                          );
+                          final detected = await ApiConfig.autoDetectBaseUrl();
+                          if (detected != null) {
+                            _urlController.text = detected;
+                            _saveUrl();
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Could not reach backend on any known IP.')),
+                            );
+                          }
+                        },
+                      ),
+                      ActionChip(
                         backgroundColor: const Color(0xFF0F172A),
-                        label: const Text('Localhost (Desktop/Web)', style: TextStyle(color: Colors.white, fontSize: 11)),
+                        label: const Text('192.168.10.124 (Wi-Fi Device)', style: TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.bold)),
+                        onPressed: () {
+                          _urlController.text = 'http://192.168.10.124:8001/api/v1';
+                          _saveUrl();
+                        },
+                      ),
+                      ActionChip(
+                        backgroundColor: const Color(0xFF0F172A),
+                        label: const Text('Localhost (USB / Desktop)', style: TextStyle(color: Colors.white, fontSize: 11)),
                         onPressed: () {
                           _urlController.text = 'http://localhost:8001/api/v1';
                           _saveUrl();
@@ -141,14 +168,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         label: const Text('10.0.2.2 (Android Emulator)', style: TextStyle(color: Colors.white, fontSize: 11)),
                         onPressed: () {
                           _urlController.text = 'http://10.0.2.2:8001/api/v1';
-                          _saveUrl();
-                        },
-                      ),
-                      ActionChip(
-                        backgroundColor: const Color(0xFF0F172A),
-                        label: const Text('192.168.10.124 (Wi-Fi Device)', style: TextStyle(color: Colors.white, fontSize: 11)),
-                        onPressed: () {
-                          _urlController.text = 'http://192.168.10.124:8001/api/v1';
                           _saveUrl();
                         },
                       ),

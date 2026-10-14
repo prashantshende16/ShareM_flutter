@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
 import 'analysis_detail_screen.dart';
+import 'settings_screen.dart';
 
 class NewAnalysisScreen extends StatefulWidget {
   const NewAnalysisScreen({super.key});
@@ -93,7 +94,21 @@ class _NewAnalysisScreenState extends State<NewAnalysisScreen> with SingleTicker
         _statusMessage = '';
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text('$e'),
+          backgroundColor: const Color(0xFFEF4444),
+          duration: const Duration(seconds: 8),
+          action: SnackBarAction(
+            label: 'Settings',
+            textColor: Colors.white,
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+              );
+            },
+          ),
+        ),
       );
     }
   }
@@ -144,7 +159,21 @@ class _NewAnalysisScreenState extends State<NewAnalysisScreen> with SingleTicker
         _statusMessage = '';
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text('$e'),
+          backgroundColor: const Color(0xFFEF4444),
+          duration: const Duration(seconds: 8),
+          action: SnackBarAction(
+            label: 'Settings',
+            textColor: Colors.white,
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+              );
+            },
+          ),
+        ),
       );
     }
   }

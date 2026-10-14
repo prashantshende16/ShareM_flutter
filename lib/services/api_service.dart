@@ -14,9 +14,68 @@ class ApiService {
 
   String get _baseUrl => ApiConfig.baseUrl;
 
+  Future<http.Response> _safeGet(String path, {Map<String, String>? queryParams}) async {
+    Uri buildUri(String base) {
+      final u = Uri.parse('$base$path');
+      return (queryParams != null && queryParams.isNotEmpty)
+          ? u.replace(queryParameters: queryParams)
+          : u;
+    }
+
+    try {
+      return await http.get(buildUri(_baseUrl));
+    } catch (e) {
+      final autoUrl = await ApiConfig.autoDetectBaseUrl();
+      if (autoUrl != null && autoUrl != _baseUrl) {
+        try {
+          return await http.get(buildUri(autoUrl));
+        } catch (_) {}
+      }
+      throw _formatError(e);
+    }
+  }
+
+  Future<http.Response> _safePost(String path, {Map<String, dynamic>? body}) async {
+    Uri buildUri(String base) => Uri.parse('$base$path');
+
+    try {
+      return await http.post(
+        buildUri(_baseUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: body != null ? jsonEncode(body) : null,
+      );
+    } catch (e) {
+      final autoUrl = await ApiConfig.autoDetectBaseUrl();
+      if (autoUrl != null && autoUrl != _baseUrl) {
+        try {
+          return await http.post(
+            buildUri(autoUrl),
+            headers: {'Content-Type': 'application/json'},
+            body: body != null ? jsonEncode(body) : null,
+          );
+        } catch (_) {}
+      }
+      throw _formatError(e);
+    }
+  }
+
+  Exception _formatError(dynamic e) {
+    final str = e.toString();
+    if (str.contains('SocketException') ||
+        str.contains('Connection refused') ||
+        str.contains('ClientException')) {
+      return Exception(
+        'Cannot connect to backend at "$_baseUrl".\n\n'
+        '• If using a phone on Wi-Fi: Go to Settings and tap "192.168.10.124 (Wi-Fi Device)"\n'
+        '• If using USB: run "adb reverse tcp:8001 tcp:8001".',
+      );
+    }
+    return Exception(str);
+  }
+
   // 1. Dashboard Stats
   Future<DashboardStats> getStats() async {
-    final response = await http.get(Uri.parse('$_baseUrl/analyses/stats'));
+    final response = await _safeGet('/analyses/stats');
     if (response.statusCode == 200) {
       return DashboardStats.fromJson(jsonDecode(response.body));
     }
@@ -25,7 +84,7 @@ class ApiService {
 
   // 2. Live Market Overview
   Future<LiveMarketOverviewResponse> getLiveOverview() async {
-    final response = await http.get(Uri.parse('$_baseUrl/market/overview'));
+    final response = await _safeGet('/market/overview');
     if (response.statusCode == 200) {
       return LiveMarketOverviewResponse.fromJson(jsonDecode(response.body));
     }
@@ -34,8 +93,7 @@ class ApiService {
 
   // 3. 5-Min Option Indicator Signal (Dual level)
   Future<OptionIndicator5m> getOptionIndicatorSignal([String symbol = 'NIFTY 50']) async {
-    final uri = Uri.parse('$_baseUrl/market/option-signal?symbol=${Uri.encodeComponent(symbol)}');
-    final response = await http.get(uri);
+    final response = await _safeGet('/market/option-signal', queryParams: {'symbol': symbol});
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       return OptionIndicator5m.fromJson(data['signal'] as Map<String, dynamic>);
@@ -49,8 +107,7 @@ class ApiService {
     if (symbol != null && symbol.isNotEmpty) queryParams['symbol'] = symbol;
     if (bias != null && bias.isNotEmpty) queryParams['bias'] = bias;
 
-    final uri = Uri.parse('$_baseUrl/analyses').replace(queryParameters: queryParams.isEmpty ? null : queryParams);
-    final response = await http.get(uri);
+    final response = await _safeGet('/analyses', queryParams: queryParams);
     if (response.statusCode == 200) {
       final List<dynamic> list = jsonDecode(response.body);
       return list.map((e) => AnalysisItem.fromJson(e as Map<String, dynamic>)).toList();
@@ -60,7 +117,7 @@ class ApiService {
 
   // 5. Single Analysis Detail
   Future<AnalysisItem> getAnalysis(int id) async {
-    final response = await http.get(Uri.parse('$_baseUrl/analyses/$id'));
+    final response = await _safeGet('/analyses/$id');
     if (response.statusCode == 200) {
       return AnalysisItem.fromJson(jsonDecode(response.body));
     }
@@ -69,7 +126,7 @@ class ApiService {
 
   // 6. Analysis Result
   Future<AnalysisResult> getAnalysisResult(int id) async {
-    final response = await http.get(Uri.parse('$_baseUrl/analyses/$id/result'));
+    final response = await _safeGet('/analyses/$id/result');
     if (response.statusCode == 200) {
       return AnalysisResult.fromJson(jsonDecode(response.body));
     }
@@ -83,15 +140,14 @@ class ApiService {
     String instrumentType = 'INDEX_FUT',
     String? notes,
   }) async {
-    final response = await http.post(
-      Uri.parse('$_baseUrl/market/analyze-live'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
+    final response = await _safePost(
+      '/market/analyze-live',
+      body: {
         'symbol': symbol,
         'market': market,
         'instrument_type': instrumentType,
         if (notes != null && notes.isNotEmpty) 'notes': notes,
-      }),
+      },
     );
 
     if (response.statusCode == 200 || response.statusCode == 201) {
@@ -109,15 +165,14 @@ class ApiService {
     String instrumentType = 'INDEX_FUT',
     String? notes,
   }) async {
-    final response = await http.post(
-      Uri.parse('$_baseUrl/analyses'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
+    final response = await _safePost(
+      '/analyses',
+      body: {
         'symbol': symbol,
         'market': market,
         'instrument_type': instrumentType,
         if (notes != null && notes.isNotEmpty) 'notes': notes,
-      }),
+      },
     );
 
     if (response.statusCode == 200 || response.statusCode == 201) {
@@ -132,8 +187,8 @@ class ApiService {
     required XFile file,
     required String timeframe,
   }) async {
-    final uri = Uri.parse('$_baseUrl/analyses/$analysisId/screenshots');
-    final request = http.MultipartRequest('POST', uri);
+    Uri uri = Uri.parse('$_baseUrl/analyses/$analysisId/screenshots');
+    http.MultipartRequest request = http.MultipartRequest('POST', uri);
 
     request.fields['timeframe'] = timeframe;
     final bytes = await file.readAsBytes();
@@ -144,15 +199,29 @@ class ApiService {
     );
     request.files.add(multipartFile);
 
-    final streamedResponse = await request.send();
-    final response = await http.Response.fromStream(streamedResponse);
-    if (response.statusCode != 200 && response.statusCode != 201) {
-      throw Exception('Failed to upload screenshot: ${response.body}');
+    try {
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw Exception('Failed to upload screenshot: ${response.body}');
+      }
+    } catch (e) {
+      final autoUrl = await ApiConfig.autoDetectBaseUrl();
+      if (autoUrl != null && autoUrl != _baseUrl) {
+        uri = Uri.parse('$autoUrl/analyses/$analysisId/screenshots');
+        request = http.MultipartRequest('POST', uri);
+        request.fields['timeframe'] = timeframe;
+        request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: file.name));
+        final streamedResponse = await request.send();
+        final response = await http.Response.fromStream(streamedResponse);
+        if (response.statusCode == 200 || response.statusCode == 201) return;
+      }
+      throw _formatError(e);
     }
   }
 
   Future<AnalysisItem> runAnalysis(int analysisId) async {
-    final response = await http.post(Uri.parse('$_baseUrl/analyses/$analysisId/run'));
+    final response = await _safePost('/analyses/$analysisId/run');
     if (response.statusCode == 200) {
       return AnalysisItem.fromJson(jsonDecode(response.body));
     }
@@ -162,11 +231,10 @@ class ApiService {
 
   // 9. Settings
   Future<SettingsStatus> getSettings() async {
-    final response = await http.get(Uri.parse('$_baseUrl/settings'));
+    final response = await _safeGet('/settings');
     if (response.statusCode == 200) {
       return SettingsStatus.fromJson(jsonDecode(response.body));
     }
     throw Exception('Failed to load settings: ${response.statusCode}');
   }
 }
-

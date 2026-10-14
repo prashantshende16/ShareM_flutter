@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
+import 'config/api_config.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/new_analysis_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/splash_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await ApiConfig.init();
   runApp(const ShareMApp());
 }
 
