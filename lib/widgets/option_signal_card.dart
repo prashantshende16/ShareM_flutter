@@ -411,3 +411,4 @@ class OptionSignalCard extends StatelessWidget {
     );
   }
 }
+

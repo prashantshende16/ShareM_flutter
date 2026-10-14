@@ -611,3 +611,4 @@ class _NewAnalysisScreenState extends State<NewAnalysisScreen> with SingleTicker
     );
   }
 }
+

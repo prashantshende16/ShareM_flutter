@@ -455,3 +455,4 @@ class _AnalysisDetailScreenState extends State<AnalysisDetailScreen> {
     );
   }
 }
+

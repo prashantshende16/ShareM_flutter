@@ -169,3 +169,4 @@ class ApiService {
     throw Exception('Failed to load settings: ${response.statusCode}');
   }
 }
+

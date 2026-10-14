@@ -5,15 +5,7 @@ class ApiConfig {
   static String? _customBaseUrl;
 
   static String get defaultBaseUrl {
-    if (kIsWeb) {
-      return 'http://localhost:8001/api/v1';
-    }
-    try {
-      if (Platform.isAndroid) {
-        // 10.0.2.2 is default for Android emulator, LAN IP for physical device
-        return 'http://10.0.2.2:8001/api/v1';
-      }
-    } catch (_) {}
+    // When adb reverse tcp:8001 tcp:8001 is run, localhost:8001 connects directly via USB
     return 'http://localhost:8001/api/v1';
   }
 
@@ -29,3 +21,4 @@ class ApiConfig {
     _customBaseUrl = null;
   }
 }
+
