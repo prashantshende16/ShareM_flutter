@@ -37,63 +37,70 @@ class OptionSignalCard extends StatelessWidget {
           children: [
             // Header Row: Direction & Refresh Button
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: themeColor.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: themeColor),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            isCall
-                                ? Icons.trending_up
-                                : isPut
-                                    ? Icons.trending_down
-                                    : Icons.horizontal_rule,
-                            color: themeColor,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            signal.decision.toUpperCase(),
-                            style: TextStyle(
+                Expanded(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: themeColor.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: themeColor),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isCall
+                                  ? Icons.trending_up
+                                  : isPut
+                                      ? Icons.trending_down
+                                      : Icons.horizontal_rule,
                               color: themeColor,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
+                              size: 18,
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF334155),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        '${signal.timeframe.toUpperCase()} Confluence',
-                        style: const TextStyle(
-                          color: Color(0xFFCBD5E1),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
+                            const SizedBox(width: 6),
+                            Text(
+                              signal.decision.toUpperCase(),
+                              style: TextStyle(
+                                color: themeColor,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ],
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF334155),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '${signal.timeframe.toUpperCase()} Confluence',
+                          style: const TextStyle(
+                            color: Color(0xFFCBD5E1),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 if (onRefresh != null)
                   IconButton(
                     icon: const Icon(Icons.refresh, color: Color(0xFF94A3B8), size: 20),
                     onPressed: onRefresh,
                     tooltip: 'Refresh Signal',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                   ),
               ],
             ),
@@ -326,20 +333,18 @@ class OptionSignalCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
 
-          // Grid of 4 boxes: Entry, SL, T1, T2
+          // Row 1: Full-width Buy / Entry Range
+          _buildMetricTile(
+            label: buyLabel,
+            value: buyValue,
+            valueColor: const Color(0xFF38BDF8),
+          ),
+          const SizedBox(height: 6),
+
+          // Row 2: 3-column row for Stop Loss, Target 1, Target 2
           Row(
             children: [
               Expanded(
-                flex: 3,
-                child: _buildMetricTile(
-                  label: buyLabel,
-                  value: buyValue,
-                  valueColor: const Color(0xFF38BDF8),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                flex: 2,
                 child: _buildMetricTile(
                   label: 'Stop Loss',
                   value: stopLoss,
@@ -348,7 +353,6 @@ class OptionSignalCard extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               Expanded(
-                flex: 2,
                 child: _buildMetricTile(
                   label: 'Target 1',
                   value: target1,
@@ -357,7 +361,6 @@ class OptionSignalCard extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               Expanded(
-                flex: 2,
                 child: _buildMetricTile(
                   label: 'Target 2',
                   value: target2,

@@ -2,24 +2,28 @@ import 'package:flutter/material.dart';
 
 class MarketStatusBadge extends StatelessWidget {
   final bool isConnected;
+  final bool isCompact;
   final VoidCallback? onTap;
 
   const MarketStatusBadge({
     super.key,
     required this.isConnected,
+    this.isCompact = true,
     this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final color = isConnected ? const Color(0xFF10B981) : const Color(0xFFF59E0B);
-    final text = isConnected ? 'Live Feed Connected' : 'Not Connected (Vision Mode)';
+    final text = isConnected
+        ? (isCompact ? 'Live Feed' : 'Market Data: Live Feed Connected')
+        : (isCompact ? 'Vision Mode' : 'Market Data: Not Connected');
 
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(16),
@@ -29,8 +33,8 @@ class MarketStatusBadge extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 8,
-              height: 8,
+              width: 7,
+              height: 7,
               decoration: BoxDecoration(
                 color: color,
                 shape: BoxShape.circle,
@@ -43,9 +47,9 @@ class MarketStatusBadge extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 5),
             Text(
-              'Market Data: $text',
+              text,
               style: TextStyle(
                 color: color,
                 fontSize: 11,

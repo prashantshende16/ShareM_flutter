@@ -115,18 +115,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF0F172A),
         elevation: 0,
+        titleSpacing: 16,
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.all(5),
               decoration: BoxDecoration(
                 color: const Color(0xFF10B981).withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(6),
               ),
               child: const Icon(
                 Icons.candlestick_chart,
                 color: Color(0xFF10B981),
-                size: 20,
+                size: 18,
               ),
             ),
             const SizedBox(width: 8),
@@ -135,7 +136,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
-                fontSize: 18,
+                fontSize: 16,
               ),
             ),
           ],
@@ -145,6 +146,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             padding: const EdgeInsets.only(right: 12),
             child: MarketStatusBadge(
               isConnected: _marketConnected,
+              isCompact: true,
             ),
           ),
         ],
