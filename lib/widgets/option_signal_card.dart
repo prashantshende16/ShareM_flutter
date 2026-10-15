@@ -3,11 +3,15 @@ import '../models/option_signal_models.dart';
 
 class OptionSignalCard extends StatelessWidget {
   final OptionIndicator5m signal;
+  final String selectedExpiryType;
+  final ValueChanged<String>? onExpiryChanged;
   final VoidCallback? onRefresh;
 
   const OptionSignalCard({
     super.key,
     required this.signal,
+    this.selectedExpiryType = 'current',
+    this.onExpiryChanged,
     this.onRefresh,
   });
 
@@ -154,10 +158,14 @@ class OptionSignalCard extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            const Text(
-                              'ACTIVE EXPIRY',
+                            Text(
+                              selectedExpiryType == 'next'
+                                  ? 'NEXT WEEK EXPIRY'
+                                  : (signal.isTodayExpiry ? 'TODAY 0DTE EXPIRY' : 'ACTIVE EXPIRY'),
                               style: TextStyle(
-                                color: Color(0xFF64748B),
+                                color: selectedExpiryType == 'next'
+                                    ? const Color(0xFF38BDF8)
+                                    : (signal.isTodayExpiry ? const Color(0xFF10B981) : const Color(0xFF64748B)),
                                 fontSize: 9,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -176,6 +184,104 @@ class OptionSignalCard extends StatelessWidget {
                   ],
                 ),
               ),
+
+            // Interactive Expiry Toggle Tabs (Current vs Next Week)
+            Container(
+              margin: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F172A),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF334155)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => onExpiryChanged?.call('current'),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        decoration: BoxDecoration(
+                          color: selectedExpiryType == 'current'
+                              ? const Color(0xFF10B981).withValues(alpha: 0.25)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          border: selectedExpiryType == 'current'
+                              ? Border.all(color: const Color(0xFF10B981))
+                              : null,
+                        ),
+                        child: Column(
+                          children: [
+                            Text(
+                              signal.isTodayExpiry ? 'TODAY (0DTE)' : 'CURRENT WEEK',
+                              style: TextStyle(
+                                color: selectedExpiryType == 'current'
+                                    ? const Color(0xFF10B981)
+                                    : const Color(0xFF94A3B8),
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 1),
+                            Text(
+                              signal.currentExpiry ?? signal.activeExpiry,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => onExpiryChanged?.call('next'),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        decoration: BoxDecoration(
+                          color: selectedExpiryType == 'next'
+                              ? const Color(0xFF0284C7).withValues(alpha: 0.25)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          border: selectedExpiryType == 'next'
+                              ? Border.all(color: const Color(0xFF38BDF8))
+                              : null,
+                        ),
+                        child: Column(
+                          children: [
+                            Text(
+                              'NEXT WEEK',
+                              style: TextStyle(
+                                color: selectedExpiryType == 'next'
+                                    ? const Color(0xFF38BDF8)
+                                    : const Color(0xFF94A3B8),
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 1),
+                            Text(
+                              signal.nextExpiry ?? 'Next Week',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
             const SizedBox(height: 12),
 

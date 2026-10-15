@@ -67,6 +67,11 @@ class OptionIndicator5m {
   final double putScore;
   final String strikeSuggestion;
   final String activeExpiry;
+  final String? activeExpiryType;
+  final String? activeExpiryLabel;
+  final String? currentExpiry;
+  final String? nextExpiry;
+  final bool isTodayExpiry;
   final OptionPremiumLevels? optionPremium;
   final IndexSpotLevels? indexSpot;
   final double entryPrice;
@@ -92,6 +97,11 @@ class OptionIndicator5m {
     required this.putScore,
     required this.strikeSuggestion,
     required this.activeExpiry,
+    this.activeExpiryType,
+    this.activeExpiryLabel,
+    this.currentExpiry,
+    this.nextExpiry,
+    this.isTodayExpiry = false,
     this.optionPremium,
     this.indexSpot,
     required this.entryPrice,
@@ -119,6 +129,11 @@ class OptionIndicator5m {
       putScore: (json['put_score'] as num?)?.toDouble() ?? 0.0,
       strikeSuggestion: json['strike_suggestion']?.toString() ?? '',
       activeExpiry: json['active_expiry']?.toString() ?? '',
+      activeExpiryType: json['active_expiry_type']?.toString(),
+      activeExpiryLabel: json['active_expiry_label']?.toString(),
+      currentExpiry: json['current_expiry']?.toString(),
+      nextExpiry: json['next_expiry']?.toString(),
+      isTodayExpiry: json['is_today_expiry'] as bool? ?? false,
       optionPremium: json['option_premium'] != null
           ? OptionPremiumLevels.fromJson(
               json['option_premium'] as Map<String, dynamic>)

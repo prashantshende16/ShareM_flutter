@@ -32,6 +32,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _marketConnected = true;
 
   String _selectedSymbol = 'NIFTY 50';
+  String _selectedExpiryType = 'current';
   final List<String> _supportedSymbols = ['NIFTY 50', 'BANK NIFTY', 'FINNIFTY'];
 
   @override
@@ -54,7 +55,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               indices: [],
               heavyweights: [],
             )),
-        _api.getOptionIndicatorSignal(_selectedSymbol).then<OptionIndicator5m?>((v) => v).catchError((e) => null),
+        _api.getOptionIndicatorSignal(_selectedSymbol, _selectedExpiryType).then<OptionIndicator5m?>((v) => v).catchError((e) => null),
         _api.getStats().catchError((e) => DashboardStats(
               totalAnalyses: 0,
               bullishScenarios: 0,
@@ -86,15 +87,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (mounted) {
         setState(() {
           _errorMessage = e.toString();
-          _isLoading = false;
         });
       }
     }
   }
 
-  Future<void> _refreshOptionSignal() async {
+  Future<void> _refreshOptionSignal([String? expiryType]) async {
+    if (expiryType != null) {
+      setState(() {
+        _selectedExpiryType = expiryType;
+      });
+    }
     try {
-      final sig = await _api.getOptionIndicatorSignal(_selectedSymbol);
+      final sig = await _api.getOptionIndicatorSignal(_selectedSymbol, _selectedExpiryType);
       if (mounted) {
         setState(() {
           _optionSignal = sig;
@@ -246,7 +251,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   if (_optionSignal != null)
                     OptionSignalCard(
                       signal: _optionSignal!,
-                      onRefresh: _refreshOptionSignal,
+                      selectedExpiryType: _selectedExpiryType,
+                      onExpiryChanged: (type) => _refreshOptionSignal(type),
+                      onRefresh: () => _refreshOptionSignal(),
                     )
                   else if (_isLoading)
                     const Center(
