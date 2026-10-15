@@ -185,98 +185,161 @@ class OptionSignalCard extends StatelessWidget {
                 ),
               ),
 
-            // Interactive Expiry Toggle Tabs (Current vs Next Week)
+            // Interactive Expiry Selector Bar (All Indian Market Expiries)
             Container(
               margin: const EdgeInsets.only(top: 8),
-              padding: const EdgeInsets.all(4),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
               decoration: BoxDecoration(
                 color: const Color(0xFF0F172A),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: const Color(0xFF334155)),
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: () => onExpiryChanged?.call('current'),
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        decoration: BoxDecoration(
-                          color: selectedExpiryType == 'current'
-                              ? const Color(0xFF10B981).withValues(alpha: 0.25)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
-                          border: selectedExpiryType == 'current'
-                              ? Border.all(color: const Color(0xFF10B981))
-                              : null,
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'SELECT MARKET EXPIRY:',
+                          style: TextStyle(
+                            color: Color(0xFF94A3B8),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
                         ),
-                        child: Column(
-                          children: [
-                            Text(
-                              signal.isTodayExpiry ? 'TODAY (0DTE)' : 'CURRENT WEEK',
-                              style: TextStyle(
-                                color: selectedExpiryType == 'current'
-                                    ? const Color(0xFF10B981)
-                                    : const Color(0xFF94A3B8),
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 1),
-                            Text(
-                              signal.currentExpiry ?? signal.activeExpiry,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
+                        Text(
+                          signal.activeExpiry,
+                          style: const TextStyle(
+                            color: Color(0xFF38BDF8),
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: InkWell(
-                      onTap: () => onExpiryChanged?.call('next'),
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        decoration: BoxDecoration(
-                          color: selectedExpiryType == 'next'
-                              ? const Color(0xFF0284C7).withValues(alpha: 0.25)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
-                          border: selectedExpiryType == 'next'
-                              ? Border.all(color: const Color(0xFF38BDF8))
-                              : null,
-                        ),
-                        child: Column(
-                          children: [
-                            Text(
-                              'NEXT WEEK',
-                              style: TextStyle(
-                                color: selectedExpiryType == 'next'
-                                    ? const Color(0xFF38BDF8)
-                                    : const Color(0xFF94A3B8),
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
+                  const SizedBox(height: 4),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    child: Row(
+                      children: (signal.availableExpiries.isNotEmpty
+                              ? signal.availableExpiries
+                              : [
+                                  OptionExpiryItem(
+                                    id: 'current',
+                                    date: signal.currentExpiry ?? '15 Oct 2026',
+                                    label: '15 Oct (Today)',
+                                    tag: '0DTE',
+                                  ),
+                                  OptionExpiryItem(
+                                    id: '16 Oct 2026',
+                                    date: '16 Oct 2026',
+                                    label: '16 Oct (Friday)',
+                                    tag: '16 Oct',
+                                  ),
+                                ])
+                          .map((exp) {
+                        final isSelected = selectedExpiryType == exp.date ||
+                            selectedExpiryType == exp.id ||
+                            signal.activeExpiry == exp.date ||
+                            (selectedExpiryType == 'current' && exp.dte == 0);
+                        final is16Oct = exp.date.contains('16 Oct');
+
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: InkWell(
+                            onTap: () => onExpiryChanged?.call(exp.date),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? (is16Oct
+                                        ? const Color(0xFFD97706)
+                                        : const Color(0xFF10B981))
+                                    : (is16Oct
+                                        ? const Color(0xFFD97706).withValues(alpha: 0.15)
+                                        : const Color(0xFF1E293B)),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? (is16Oct
+                                          ? const Color(0xFFFBBF24)
+                                          : const Color(0xFF34D399))
+                                      : (is16Oct
+                                          ? const Color(0xFFB45309)
+                                          : const Color(0xFF334155)),
+                                  width: isSelected ? 1.5 : 1.0,
+                                ),
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        exp.date.split(' ').take(2).join(' '),
+                                        style: TextStyle(
+                                          color: isSelected
+                                              ? Colors.white
+                                              : (is16Oct
+                                                  ? const Color(0xFFFDE68A)
+                                                  : const Color(0xFFE2E8F0)),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      if (is16Oct) ...[
+                                        const SizedBox(width: 4),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 3,
+                                            vertical: 1,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.amber.shade400.withValues(alpha: 0.3),
+                                            borderRadius: BorderRadius.circular(3),
+                                          ),
+                                          child: const Text(
+                                            'HOT',
+                                            style: TextStyle(
+                                              color: Colors.amber,
+                                              fontSize: 8,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    exp.dte == 0
+                                        ? '0DTE'
+                                        : (exp.tag.isNotEmpty ? exp.tag : '${exp.dte}d'),
+                                    style: TextStyle(
+                                      color: isSelected
+                                          ? Colors.white.withValues(alpha: 0.9)
+                                          : const Color(0xFF94A3B8),
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            const SizedBox(height: 1),
-                            Text(
-                              signal.nextExpiry ?? 'Next Week',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                          ),
+                        );
+                      }).toList(),
                     ),
                   ),
                 ],

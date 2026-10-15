@@ -59,6 +59,32 @@ class IndexSpotLevels {
   }
 }
 
+class OptionExpiryItem {
+  final String id;
+  final String date;
+  final String label;
+  final String tag;
+  final int dte;
+
+  OptionExpiryItem({
+    required this.id,
+    required this.date,
+    required this.label,
+    this.tag = '',
+    this.dte = 0,
+  });
+
+  factory OptionExpiryItem.fromJson(Map<String, dynamic> json) {
+    return OptionExpiryItem(
+      id: json['id']?.toString() ?? json['date']?.toString() ?? '',
+      date: json['date']?.toString() ?? '',
+      label: json['label']?.toString() ?? json['date']?.toString() ?? '',
+      tag: json['tag']?.toString() ?? '',
+      dte: (json['dte'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
 class OptionIndicator5m {
   final String decision;
   final String direction;
@@ -72,6 +98,7 @@ class OptionIndicator5m {
   final String? currentExpiry;
   final String? nextExpiry;
   final bool isTodayExpiry;
+  final List<OptionExpiryItem> availableExpiries;
   final OptionPremiumLevels? optionPremium;
   final IndexSpotLevels? indexSpot;
   final double entryPrice;
@@ -102,6 +129,7 @@ class OptionIndicator5m {
     this.currentExpiry,
     this.nextExpiry,
     this.isTodayExpiry = false,
+    this.availableExpiries = const [],
     this.optionPremium,
     this.indexSpot,
     required this.entryPrice,
@@ -134,6 +162,10 @@ class OptionIndicator5m {
       currentExpiry: json['current_expiry']?.toString(),
       nextExpiry: json['next_expiry']?.toString(),
       isTodayExpiry: json['is_today_expiry'] as bool? ?? false,
+      availableExpiries: (json['available_expiries'] as List<dynamic>?)
+              ?.map((e) => OptionExpiryItem.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
       optionPremium: json['option_premium'] != null
           ? OptionPremiumLevels.fromJson(
               json['option_premium'] as Map<String, dynamic>)

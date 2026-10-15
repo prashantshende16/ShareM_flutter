@@ -76,6 +76,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         setState(() {
           _liveMarket = results[0] as LiveMarketOverviewResponse?;
           _optionSignal = results[1] as OptionIndicator5m?;
+          if (_optionSignal != null && _optionSignal!.activeExpiry.isNotEmpty) {
+            _selectedExpiryType = _optionSignal!.activeExpiry;
+          }
           _stats = results[2] as DashboardStats?;
           _recentAnalyses = (results[3] as List<AnalysisItem>?) ?? [];
           final settings = results[4] as SettingsStatus?;
@@ -103,6 +106,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (mounted) {
         setState(() {
           _optionSignal = sig;
+          if (sig.activeExpiry.isNotEmpty) {
+            _selectedExpiryType = sig.activeExpiry;
+          }
         });
       }
     } catch (e) {
