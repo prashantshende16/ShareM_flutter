@@ -85,6 +85,105 @@ class OptionExpiryItem {
   }
 }
 
+class TradeExecution {
+  final String contractName;
+  final int lotSize;
+  final int lots;
+  final int totalQuantity;
+  final double currentLtp;
+  final double recommendedEntry;
+  final double stopLoss;
+  final double target1;
+  final double target2;
+  final double capitalRequired;
+  final double maxRiskAmount;
+  final double target1Profit;
+  final double target2Profit;
+  final String riskRewardRatio;
+
+  TradeExecution({
+    required this.contractName,
+    required this.lotSize,
+    required this.lots,
+    required this.totalQuantity,
+    required this.currentLtp,
+    required this.recommendedEntry,
+    required this.stopLoss,
+    required this.target1,
+    required this.target2,
+    required this.capitalRequired,
+    required this.maxRiskAmount,
+    required this.target1Profit,
+    required this.target2Profit,
+    required this.riskRewardRatio,
+  });
+
+  factory TradeExecution.fromJson(Map<String, dynamic> json) {
+    return TradeExecution(
+      contractName: json['contract_name']?.toString() ?? '',
+      lotSize: (json['lot_size'] as num?)?.toInt() ?? 65,
+      lots: (json['lots'] as num?)?.toInt() ?? 1,
+      totalQuantity: (json['total_quantity'] as num?)?.toInt() ?? 65,
+      currentLtp: (json['current_ltp'] as num?)?.toDouble() ?? 0.0,
+      recommendedEntry: (json['recommended_entry'] as num?)?.toDouble() ?? 0.0,
+      stopLoss: (json['stop_loss'] as num?)?.toDouble() ?? 0.0,
+      target1: (json['target_1'] as num?)?.toDouble() ?? 0.0,
+      target2: (json['target_2'] as num?)?.toDouble() ?? 0.0,
+      capitalRequired: (json['capital_required'] as num?)?.toDouble() ?? 0.0,
+      maxRiskAmount: (json['max_risk_amount'] as num?)?.toDouble() ?? 0.0,
+      target1Profit: (json['target_1_profit'] as num?)?.toDouble() ?? 0.0,
+      target2Profit: (json['target_2_profit'] as num?)?.toDouble() ?? 0.0,
+      riskRewardRatio: json['risk_reward_ratio']?.toString() ?? '1:1.5',
+    );
+  }
+}
+
+class IndicatorChecklistItem {
+  final String indicator;
+  final String status;
+  final String value;
+  final String detail;
+
+  IndicatorChecklistItem({
+    required this.indicator,
+    required this.status,
+    required this.value,
+    required this.detail,
+  });
+
+  factory IndicatorChecklistItem.fromJson(Map<String, dynamic> json) {
+    return IndicatorChecklistItem(
+      indicator: json['indicator']?.toString() ?? '',
+      status: json['status']?.toString() ?? 'NEUTRAL',
+      value: json['value']?.toString() ?? '',
+      detail: json['detail']?.toString() ?? '',
+    );
+  }
+}
+
+class ConfluenceScore {
+  final int confirmed;
+  final int total;
+  final double percentage;
+  final String verdict;
+
+  ConfluenceScore({
+    required this.confirmed,
+    required this.total,
+    required this.percentage,
+    required this.verdict,
+  });
+
+  factory ConfluenceScore.fromJson(Map<String, dynamic> json) {
+    return ConfluenceScore(
+      confirmed: (json['confirmed'] as num?)?.toInt() ?? 0,
+      total: (json['total'] as num?)?.toInt() ?? 6,
+      percentage: (json['percentage'] as num?)?.toDouble() ?? 0.0,
+      verdict: json['verdict']?.toString() ?? '',
+    );
+  }
+}
+
 class OptionIndicator5m {
   final String decision;
   final String direction;
@@ -101,6 +200,9 @@ class OptionIndicator5m {
   final List<OptionExpiryItem> availableExpiries;
   final OptionPremiumLevels? optionPremium;
   final IndexSpotLevels? indexSpot;
+  final TradeExecution? tradeExecution;
+  final List<IndicatorChecklistItem> indicatorChecklist;
+  final ConfluenceScore? confluenceScore;
   final double entryPrice;
   final double stopLoss;
   final double target1;
@@ -132,6 +234,9 @@ class OptionIndicator5m {
     this.availableExpiries = const [],
     this.optionPremium,
     this.indexSpot,
+    this.tradeExecution,
+    this.indicatorChecklist = const [],
+    this.confluenceScore,
     required this.entryPrice,
     required this.stopLoss,
     required this.target1,
@@ -174,6 +279,19 @@ class OptionIndicator5m {
           ? IndexSpotLevels.fromJson(
               json['index_spot'] as Map<String, dynamic>)
           : null,
+      tradeExecution: json['trade_execution'] != null
+          ? TradeExecution.fromJson(
+              json['trade_execution'] as Map<String, dynamic>)
+          : null,
+      indicatorChecklist: (json['indicator_checklist'] as List<dynamic>?)
+              ?.map((e) =>
+                  IndicatorChecklistItem.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
+      confluenceScore: json['confluence_score'] != null
+          ? ConfluenceScore.fromJson(
+              json['confluence_score'] as Map<String, dynamic>)
+          : null,
       entryPrice: (json['entry_price'] as num?)?.toDouble() ?? 0.0,
       stopLoss: (json['stop_loss'] as num?)?.toDouble() ?? 0.0,
       target1: (json['target_1'] as num?)?.toDouble() ?? 0.0,
@@ -198,4 +316,5 @@ class OptionIndicator5m {
     );
   }
 }
+
 

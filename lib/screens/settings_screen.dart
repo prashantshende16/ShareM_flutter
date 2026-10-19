@@ -141,6 +141,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             _urlController.text = detected;
                             _saveUrl();
                           } else {
+                            if (!context.mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(content: Text('Could not reach backend on any known IP.')),
                             );
