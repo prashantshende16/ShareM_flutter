@@ -13,10 +13,18 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final ApiService _api = ApiService();
   final TextEditingController _urlController = TextEditingController();
+  final TextEditingController _angelApiKeyController = TextEditingController();
+  final TextEditingController _angelClientCodeController = TextEditingController();
+  final TextEditingController _angelPinController = TextEditingController();
+  final TextEditingController _angelTotpController = TextEditingController();
 
   bool _isLoading = false;
+  bool _isSavingAngel = false;
+  bool _isTestingAngel = false;
   SettingsStatus? _settings;
   String? _statusMessage;
+  String? _angelStatusMessage;
+  bool? _angelTestSuccess;
 
   @override
   void initState() {
@@ -28,6 +36,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void dispose() {
     _urlController.dispose();
+    _angelApiKeyController.dispose();
+    _angelClientCodeController.dispose();
+    _angelPinController.dispose();
+    _angelTotpController.dispose();
     super.dispose();
   }
 
@@ -44,6 +56,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _settings = st;
           _isLoading = false;
           _statusMessage = 'Connected successfully to backend API';
+          if (st.angelOneClientCode.isNotEmpty && _angelClientCodeController.text.isEmpty) {
+            _angelClientCodeController.text = st.angelOneClientCode;
+          }
         });
       }
     } catch (e) {
@@ -62,6 +77,80 @@ class _SettingsScreenState extends State<SettingsScreen> {
       SnackBar(content: Text('API URL updated: ${ApiConfig.baseUrl}')),
     );
     _checkSettings();
+  }
+
+  Future<void> _saveAngelOneSettings() async {
+    setState(() {
+      _isSavingAngel = true;
+      _angelStatusMessage = null;
+    });
+
+    try {
+      final updated = await _api.updateAngelOneSettings(
+        apiKey: _angelApiKeyController.text.trim(),
+        clientCode: _angelClientCodeController.text.trim(),
+        pin: _angelPinController.text.trim(),
+        totpKey: _angelTotpController.text.trim(),
+      );
+      if (mounted) {
+        setState(() {
+          _settings = updated;
+          _isSavingAngel = false;
+          _angelStatusMessage = 'Angel One credentials saved successfully!';
+          _angelTestSuccess = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Angel One settings saved!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSavingAngel = false;
+          _angelStatusMessage = 'Failed to save: $e';
+          _angelTestSuccess = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _testAngelOneConnection() async {
+    setState(() {
+      _isTestingAngel = true;
+      _angelStatusMessage = null;
+    });
+
+    try {
+      if (_angelApiKeyController.text.isNotEmpty ||
+          _angelClientCodeController.text.isNotEmpty ||
+          _angelPinController.text.isNotEmpty ||
+          _angelTotpController.text.isNotEmpty) {
+        await _api.updateAngelOneSettings(
+          apiKey: _angelApiKeyController.text.trim(),
+          clientCode: _angelClientCodeController.text.trim(),
+          pin: _angelPinController.text.trim(),
+          totpKey: _angelTotpController.text.trim(),
+        );
+      }
+
+      final res = await _api.testAngelOneConnection();
+      if (mounted) {
+        setState(() {
+          _isTestingAngel = false;
+          final isSuccess = res['status'] == 'success' || res['connected'] == true;
+          _angelTestSuccess = isSuccess;
+          _angelStatusMessage = res['message']?.toString() ?? 'Test completed';
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isTestingAngel = false;
+          _angelStatusMessage = 'Angel One connection test error: $e';
+          _angelTestSuccess = false;
+        });
+      }
+    }
   }
 
   @override
@@ -193,6 +282,238 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onPressed: _isLoading ? null : _checkSettings,
                     ),
                   ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Angel One SmartAPI Free Live Data Card
+          Card(
+            color: const Color(0xFF1E293B),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(
+                color: (_settings?.angelOneConfigured ?? false)
+                    ? const Color(0xFF10B981).withValues(alpha: 0.5)
+                    : const Color(0xFF334155),
+                width: 1.2,
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: const [
+                          Icon(Icons.bolt, color: Color(0xFFF59E0B), size: 20),
+                          SizedBox(width: 8),
+                          Text(
+                            'Angel One SmartAPI (Free)',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: (_settings?.angelOneConfigured ?? false)
+                              ? const Color(0xFF10B981).withValues(alpha: 0.2)
+                              : const Color(0xFF334155),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          (_settings?.angelOneConfigured ?? false) ? 'CONFIGURED' : 'OPTIONAL',
+                          style: TextStyle(
+                            color: (_settings?.angelOneConfigured ?? false)
+                                ? const Color(0xFF34D399)
+                                : const Color(0xFF94A3B8),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Connect your free Angel One Trading API credentials to stream real-time ticks & live option chain directly into the 6-indicator engine.',
+                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // API Key
+                  TextField(
+                    controller: _angelApiKeyController,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: InputDecoration(
+                      labelText: 'SmartAPI Key',
+                      labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                      hintText: 'Enter SmartAPI Key',
+                      hintStyle: const TextStyle(color: Color(0xFF475569)),
+                      filled: true,
+                      fillColor: const Color(0xFF0F172A),
+                      isDense: true,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: Color(0xFF334155)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Client Code & PIN in a row
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _angelClientCodeController,
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          decoration: InputDecoration(
+                            labelText: 'Client Code',
+                            labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                            hintText: 'e.g. P123456',
+                            hintStyle: const TextStyle(color: Color(0xFF475569)),
+                            filled: true,
+                            fillColor: const Color(0xFF0F172A),
+                            isDense: true,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: Color(0xFF334155)),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: _angelPinController,
+                          obscureText: true,
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          decoration: InputDecoration(
+                            labelText: 'Login MPIN',
+                            labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                            hintText: '••••',
+                            hintStyle: const TextStyle(color: Color(0xFF475569)),
+                            filled: true,
+                            fillColor: const Color(0xFF0F172A),
+                            isDense: true,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: Color(0xFF334155)),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  // TOTP Secret Key
+                  TextField(
+                    controller: _angelTotpController,
+                    obscureText: true,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: InputDecoration(
+                      labelText: 'TOTP Secret Key (Base32)',
+                      labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                      hintText: 'Key from Google Authenticator setup',
+                      hintStyle: const TextStyle(color: Color(0xFF475569)),
+                      filled: true,
+                      fillColor: const Color(0xFF0F172A),
+                      isDense: true,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: Color(0xFF334155)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Save & Test Buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFD97706),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                          ),
+                          icon: _isSavingAngel
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                )
+                              : const Icon(Icons.save, size: 16),
+                          label: Text(_isSavingAngel ? 'Saving...' : 'Save Keys', style: const TextStyle(fontSize: 12)),
+                          onPressed: _isSavingAngel ? null : _saveAngelOneSettings,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF334155),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                          ),
+                          icon: _isTestingAngel
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                )
+                              : const Icon(Icons.trending_up, size: 16, color: Color(0xFF10B981)),
+                          label: Text(_isTestingAngel ? 'Testing...' : 'Test Feed', style: const TextStyle(fontSize: 12)),
+                          onPressed: _isTestingAngel ? null : _testAngelOneConnection,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  // Angel One Feedback
+                  if (_angelStatusMessage != null) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: _angelTestSuccess == true
+                            ? const Color(0xFF064E3B).withValues(alpha: 0.3)
+                            : const Color(0xFF881337).withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: _angelTestSuccess == true
+                              ? const Color(0xFF065F46)
+                              : const Color(0xFF9F1239),
+                        ),
+                      ),
+                      child: Text(
+                        _angelStatusMessage!,
+                        style: TextStyle(
+                          color: _angelTestSuccess == true
+                              ? const Color(0xFF34D399)
+                              : const Color(0xFFFB7185),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

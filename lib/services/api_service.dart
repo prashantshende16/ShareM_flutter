@@ -243,4 +243,30 @@ class ApiService {
     }
     throw Exception('Failed to load settings: ${response.statusCode}');
   }
+
+  Future<SettingsStatus> updateAngelOneSettings({
+    String? apiKey,
+    String? clientCode,
+    String? pin,
+    String? totpKey,
+    String? preference,
+  }) async {
+    final payload = <String, dynamic>{};
+    if (apiKey != null && apiKey.isNotEmpty) payload['angel_one_api_key'] = apiKey;
+    if (clientCode != null && clientCode.isNotEmpty) payload['angel_one_client_code'] = clientCode;
+    if (pin != null && pin.isNotEmpty) payload['angel_one_pin'] = pin;
+    if (totpKey != null && totpKey.isNotEmpty) payload['angel_one_totp_key'] = totpKey;
+    if (preference != null && preference.isNotEmpty) payload['data_source_preference'] = preference;
+
+    final response = await _safePost('/settings', body: payload);
+    if (response.statusCode == 200) {
+      return SettingsStatus.fromJson(jsonDecode(response.body));
+    }
+    throw Exception('Failed to update Angel One settings: ${response.statusCode}');
+  }
+
+  Future<Map<String, dynamic>> testAngelOneConnection() async {
+    final response = await _safePost('/settings/test-angel-one');
+    return jsonDecode(response.body);
+  }
 }

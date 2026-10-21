@@ -125,12 +125,18 @@ class SettingsStatus {
   final List<String> availableProviders;
   final bool marketDataConnected;
   final String marketDataStatus;
+  final bool angelOneConfigured;
+  final String angelOneClientCode;
+  final String dataSourcePreference;
 
   SettingsStatus({
     required this.currentProvider,
     required this.availableProviders,
     required this.marketDataConnected,
     required this.marketDataStatus,
+    this.angelOneConfigured = false,
+    this.angelOneClientCode = '',
+    this.dataSourcePreference = 'auto',
   });
 
   factory SettingsStatus.fromJson(Map<String, dynamic> json) {
@@ -142,6 +148,9 @@ class SettingsStatus {
           [],
       marketDataConnected: json['market_data_connected'] == true,
       marketDataStatus: json['market_data_status']?.toString() ?? '',
+      angelOneConfigured: json['angel_one_configured'] == true,
+      angelOneClientCode: json['angel_one_client_code']?.toString() ?? '',
+      dataSourcePreference: json['data_source_preference']?.toString() ?? 'auto',
     );
   }
 }
