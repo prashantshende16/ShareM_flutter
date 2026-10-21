@@ -5,11 +5,13 @@ import 'status_badge.dart';
 class AnalysisCard extends StatelessWidget {
   final AnalysisItem analysis;
   final VoidCallback onTap;
+  final VoidCallback? onDelete;
 
   const AnalysisCard({
     super.key,
     required this.analysis,
     required this.onTap,
+    this.onDelete,
   });
 
   @override
@@ -104,7 +106,7 @@ class AnalysisCard extends StatelessWidget {
 
               const SizedBox(height: 10),
 
-              // Footer: Screenshots count & date
+              // Footer: Screenshots count, date & Delete action
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -121,14 +123,48 @@ class AnalysisCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  Text(
-                    analysis.createdAt.length >= 10
-                        ? analysis.createdAt.substring(0, 10)
-                        : analysis.createdAt,
-                    style: const TextStyle(
-                      color: Color(0xFF64748B),
-                      fontSize: 11,
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        analysis.createdAt.length >= 10
+                            ? analysis.createdAt.substring(0, 10)
+                            : analysis.createdAt,
+                        style: const TextStyle(
+                          color: Color(0xFF64748B),
+                          fontSize: 11,
+                        ),
+                      ),
+                      if (onDelete != null) ...[
+                        const SizedBox(width: 8),
+                        InkWell(
+                          onTap: onDelete,
+                          borderRadius: BorderRadius.circular(6),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF881337).withValues(alpha: 0.3),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFF9F1239)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.delete_outline, size: 13, color: Color(0xFFFB7185)),
+                                SizedBox(width: 2),
+                                Text(
+                                  'Delete',
+                                  style: TextStyle(
+                                    color: Color(0xFFFB7185),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),

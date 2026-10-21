@@ -66,6 +66,88 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }).toList();
   }
 
+  Future<void> _handleDelete(int id, String symbol) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: const Text('Delete Analysis', style: TextStyle(color: Colors.white)),
+        content: Text('Are you sure you want to delete analysis for $symbol (#$id)?',
+            style: const TextStyle(color: Color(0xFF94A3B8))),
+        actions: [
+          TextButton(
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            onPressed: () => Navigator.pop(ctx, false),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF43F5E)),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _api.deleteAnalysis(id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Analysis for $symbol deleted')),
+          );
+        }
+        _loadAnalyses();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to delete: $e')),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _handleDeleteAll() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: const Text('Delete All Records', style: TextStyle(color: Colors.white)),
+        content: const Text('Are you sure you want to delete ALL analysis records? This cannot be undone.',
+            style: TextStyle(color: Color(0xFF94A3B8))),
+        actions: [
+          TextButton(
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            onPressed: () => Navigator.pop(ctx, false),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF43F5E)),
+            child: const Text('Delete All', style: TextStyle(color: Colors.white)),
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _api.deleteAllAnalyses();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('All analyses deleted successfully')),
+          );
+        }
+        _loadAnalyses();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to delete: $e')),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final list = _filteredAnalyses;
@@ -79,6 +161,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
           'Analysis History',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
+        actions: [
+          if (_analyses.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.delete_sweep, color: Color(0xFFFB7185)),
+              tooltip: 'Delete All Records',
+              onPressed: _handleDeleteAll,
+            ),
+        ],
       ),
       body: Column(
         children: [
@@ -171,6 +261,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                   ),
                                 ).then((_) => _loadAnalyses());
                               },
+                              onDelete: () => _handleDelete(analysis.id, analysis.symbol),
                             );
                           },
                         ),

@@ -119,6 +119,88 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<void> _handleDelete(int id, String symbol) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: const Text('Delete Analysis', style: TextStyle(color: Colors.white)),
+        content: Text('Are you sure you want to delete analysis for $symbol (#$id)?',
+            style: const TextStyle(color: Color(0xFF94A3B8))),
+        actions: [
+          TextButton(
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            onPressed: () => Navigator.pop(ctx, false),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF43F5E)),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _api.deleteAnalysis(id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Analysis for $symbol deleted')),
+          );
+        }
+        _loadDashboardData();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to delete: $e')),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _handleDeleteAll() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: const Text('Delete All Records', style: TextStyle(color: Colors.white)),
+        content: const Text('Are you sure you want to delete ALL finished analysis records? This cannot be undone.',
+            style: TextStyle(color: Color(0xFF94A3B8))),
+        actions: [
+          TextButton(
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            onPressed: () => Navigator.pop(ctx, false),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF43F5E)),
+            child: const Text('Delete All', style: TextStyle(color: Colors.white)),
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _api.deleteAllAnalyses();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('All analyses deleted successfully')),
+          );
+        }
+        _loadDashboardData();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to delete: $e')),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -299,28 +381,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      TextButton.icon(
-                        icon: const Icon(Icons.add, size: 16, color: Color(0xFF10B981)),
-                        label: const Text(
-                          'New Analysis',
-                          style: TextStyle(
-                            color: Color(0xFF10B981),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                        onPressed: () {
-                          if (widget.onNavigateToNew != null) {
-                            widget.onNavigateToNew!();
-                          } else {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const NewAnalysisScreen(),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_recentAnalyses.isNotEmpty)
+                            TextButton.icon(
+                              icon: const Icon(Icons.delete_sweep, size: 16, color: Color(0xFFF43F5E)),
+                              label: const Text(
+                                'Clear All',
+                                style: TextStyle(
+                                  color: Color(0xFFF43F5E),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
                               ),
-                            ).then((_) => _loadDashboardData());
-                          }
-                        },
+                              onPressed: _handleDeleteAll,
+                            ),
+                          TextButton.icon(
+                            icon: const Icon(Icons.add, size: 16, color: Color(0xFF10B981)),
+                            label: const Text(
+                              'New Analysis',
+                              style: TextStyle(
+                                color: Color(0xFF10B981),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            onPressed: () {
+                              if (widget.onNavigateToNew != null) {
+                                widget.onNavigateToNew!();
+                              } else {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const NewAnalysisScreen(),
+                                  ),
+                                ).then((_) => _loadDashboardData());
+                              }
+                            },
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -388,6 +488,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ..._recentAnalyses.take(5).map((analysis) {
                       return AnalysisCard(
                         analysis: analysis,
+                        onDelete: () => _handleDelete(analysis.id, analysis.symbol),
                         onTap: () {
                           Navigator.push(
                             context,

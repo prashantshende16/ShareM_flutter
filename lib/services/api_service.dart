@@ -59,6 +59,28 @@ class ApiService {
     }
   }
 
+  Future<http.Response> _safeDelete(String path) async {
+    Uri buildUri(String base) => Uri.parse('$base$path');
+
+    try {
+      return await http.delete(
+        buildUri(_baseUrl),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      final autoUrl = await ApiConfig.autoDetectBaseUrl();
+      if (autoUrl != null && autoUrl != _baseUrl) {
+        try {
+          return await http.delete(
+            buildUri(autoUrl),
+            headers: {'Content-Type': 'application/json'},
+          );
+        } catch (_) {}
+      }
+      throw _formatError(e);
+    }
+  }
+
   Exception _formatError(dynamic e) {
     final str = e.toString();
     if (str.contains('SocketException') ||
@@ -137,6 +159,21 @@ class ApiService {
       return AnalysisResult.fromJson(jsonDecode(response.body));
     }
     throw Exception('Failed to load analysis result: ${response.statusCode}');
+  }
+
+  // 6b. Delete Analysis
+  Future<void> deleteAnalysis(int id) async {
+    final response = await _safeDelete('/analyses/$id');
+    if (response.statusCode != 200) {
+      throw Exception('Failed to delete analysis: ${response.statusCode}');
+    }
+  }
+
+  Future<void> deleteAllAnalyses() async {
+    final response = await _safeDelete('/analyses');
+    if (response.statusCode != 200) {
+      throw Exception('Failed to delete all analyses: ${response.statusCode}');
+    }
   }
 
   // 7. Instant 1-Click Live AI Analysis
