@@ -33,12 +33,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   String _selectedSymbol = 'NIFTY 50';
   String _selectedExpiryType = 'current';
+  String _selectedTimeframe = '5m';
   int? _selectedStrike;
   final List<String> _supportedSymbols = ['NIFTY 50', 'BANK NIFTY', 'SENSEX', 'FINNIFTY', 'MIDCPNIFTY'];
   Map<String, OptionIndicator5m> _allOptionSignals = {};
   String _lastEvaluatedAt = '';
   String _lastValidUntil = '';
   bool _isRefreshingAll = false;
+  Map<String, dynamic>? _globalRadarData;
+  bool _isRunningAIAgent = false;
 
   @override
   void initState() {
@@ -60,7 +63,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               indices: [],
               heavyweights: [],
             )),
-        _api.getAllOptionSignals(expiryType: _selectedExpiryType).catchError((e) => <String, dynamic>{}),
+        _api.getAllOptionSignals(expiryType: _selectedExpiryType, timeframe: _selectedTimeframe).catchError((e) => <String, dynamic>{}),
         _api.getStats().catchError((e) => DashboardStats(
               totalAnalyses: 0,
               bullishScenarios: 0,
@@ -75,6 +78,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               marketDataConnected: true,
               marketDataStatus: 'Connected',
             )),
+        _api.getGlobalRadar().catchError((e) => <String, dynamic>{}),
       ]);
 
       if (mounted) {
@@ -110,6 +114,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _recentAnalyses = (results[3] as List<AnalysisItem>?) ?? [];
           final settings = results[4] as SettingsStatus?;
           _marketConnected = settings?.marketDataConnected ?? true;
+          final radarRes = results[5] as Map<String, dynamic>?;
+          if (radarRes != null && radarRes.isNotEmpty) {
+            _globalRadarData = radarRes;
+          }
           _isLoading = false;
         });
       }
@@ -123,10 +131,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  Future<void> _refreshAllOptionSignals([String? expiryType]) async {
+  Future<void> _refreshAllOptionSignals([String? expiryType, String? timeframe]) async {
     if (expiryType != null) {
       setState(() {
         _selectedExpiryType = expiryType;
+      });
+    }
+    if (timeframe != null) {
+      setState(() {
+        _selectedTimeframe = timeframe;
       });
     }
     setState(() {
@@ -134,7 +147,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
 
     try {
-      final res = await _api.getAllOptionSignals(expiryType: _selectedExpiryType);
+      final res = await _api.getAllOptionSignals(
+        expiryType: _selectedExpiryType,
+        timeframe: _selectedTimeframe,
+      );
       final signals = (res['signals'] as Map<String, OptionIndicator5m>?) ?? {};
 
       if (mounted) {
@@ -173,7 +189,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  Future<void> _refreshOptionSignal([String? expiryType, int? strike]) async {
+  Future<void> _refreshOptionSignal([String? expiryType, int? strike, String? timeframe]) async {
     if (expiryType != null) {
       setState(() {
         _selectedExpiryType = expiryType;
@@ -184,11 +200,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _selectedStrike = strike;
       });
     }
+    if (timeframe != null) {
+      setState(() {
+        _selectedTimeframe = timeframe;
+      });
+    }
     try {
       final sig = await _api.getOptionIndicatorSignal(
         _selectedSymbol,
         _selectedExpiryType,
         _selectedStrike,
+        null,
+        _selectedTimeframe,
       );
       if (mounted) {
         setState(() {
@@ -207,6 +230,207 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to refresh option signal: $e')),
       );
+    }
+  }
+
+  Future<void> _showAIMarketStrategyDialog() async {
+    setState(() {
+      _isRunningAIAgent = true;
+    });
+
+    try {
+      final res = await _api.getAIMarketStrategy(
+        symbol: _selectedSymbol,
+        timeframe: _selectedTimeframe,
+        expiryType: _selectedExpiryType,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _isRunningAIAgent = false;
+      });
+
+      final strategy = res['agent_strategy'] as Map<String, dynamic>? ?? {};
+      final alignment = res['timeframe_alignment'] as Map<String, dynamic>? ?? {};
+      final verdict = strategy['verdict']?.toString() ?? 'WAIT';
+      final isCall = verdict.contains('CALL');
+      final isPut = verdict.contains('PUT');
+      final color = isCall ? const Color(0xFF10B981) : isPut ? const Color(0xFFF43F5E) : const Color(0xFFF59E0B);
+
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: const Color(0xFF0F172A),
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        builder: (ctx) => DraggableScrollableSheet(
+          initialChildSize: 0.85,
+          maxChildSize: 0.95,
+          minChildSize: 0.5,
+          expand: false,
+          builder: (_, scrollController) => ListView(
+            controller: scrollController,
+            padding: const EdgeInsets.all(20),
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF6366F1).withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.smart_toy, color: Color(0xFF818CF8), size: 20),
+                      ),
+                      const SizedBox(width: 10),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Gemini AI Market Strategy Agent',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                          ),
+                          Text(
+                            '$_selectedSymbol • ${_selectedTimeframe == '15m' ? '15-Min Swing' : '5-Min Scalp'}',
+                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.grey),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // Strategy Verdict Card
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: color.withValues(alpha: 0.4)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          verdict,
+                          style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'Score: ${strategy['confidence_score'] ?? 80}%',
+                            style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Timeframe Harmony: ${alignment['label'] ?? ""}',
+                      style: const TextStyle(color: Color(0xFFE2E8F0), fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              // Macro Context
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF334155)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.public, color: Color(0xFF38BDF8), size: 14),
+                        SizedBox(width: 6),
+                        Text(
+                          'GLOBAL MACRO CONTEXT (US, UK, CRUDE)',
+                          style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      strategy['macro_global_context']?.toString() ?? '',
+                      style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12, height: 1.4),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Trade Plan Execution
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF334155)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.bolt, color: Color(0xFF10B981), size: 14),
+                        SizedBox(width: 6),
+                        Text(
+                          'ANGEL ONE ACTIONABLE TRADE PLAN',
+                          style: TextStyle(color: Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      strategy['recommended_contract']?.toString() ?? '',
+                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('LTP: ₹${strategy['live_ltp'] ?? "--"}', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12)),
+                        Text('Entry: ₹${strategy['trigger_entry'] ?? "--"}', style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 12)),
+                        Text('SL: ₹${strategy['stop_loss'] ?? "--"}', style: const TextStyle(color: Color(0xFFF43F5E), fontWeight: FontWeight.bold, fontSize: 12)),
+                        Text('T1: ₹${strategy['target_1'] ?? "--"}', style: const TextStyle(color: Color(0xFF34D399), fontWeight: FontWeight.bold, fontSize: 12)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isRunningAIAgent = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to run AI Strategy: $e')),
+        );
+      }
     }
   }
 
@@ -374,21 +598,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Global Radar & Macro Banner
+                  if (_globalRadarData != null) _buildGlobalRadarBanner(),
+
                   // Quick Stats Row
                   if (_stats != null) _buildStatsGrid(),
 
                   const SizedBox(height: 16),
 
-                  // Option Scalp & Confluence Header + Symbol Switcher & Refresh All Markets
+                  // Option Scalp & Confluence Header + Duration & AI Strategy Controls
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            '5-Min Option Scalp & Confluence',
-                            style: TextStyle(
+                          Text(
+                            '${_selectedTimeframe == '15m' ? '15-Min Swing' : '5-Min Scalp'} & Confluence',
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 15,
                               fontWeight: FontWeight.bold,
@@ -405,26 +632,102 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ),
                         ],
                       ),
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0284C7),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                        onPressed: _isRefreshingAll ? null : () => _refreshAllOptionSignals(),
-                        icon: _isRefreshingAll
-                            ? const SizedBox(
-                                width: 12,
-                                height: 12,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                              )
-                            : const Icon(Icons.refresh, size: 14),
-                        label: Text(
-                          _isRefreshingAll ? 'Scanning...' : 'Refresh All',
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                        ),
+                      Row(
+                        children: [
+                          // 5m vs 15m Toggle Chips
+                          Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0F172A),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFF334155)),
+                            ),
+                            child: Row(
+                              children: [
+                                InkWell(
+                                  onTap: () {
+                                    if (_selectedTimeframe != '5m') {
+                                      setState(() {
+                                        _selectedTimeframe = '5m';
+                                      });
+                                      _refreshAllOptionSignals(_selectedExpiryType, '5m');
+                                    }
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: _selectedTimeframe == '5m' ? const Color(0xFF0284C7) : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: const Text('5m', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                  ),
+                                ),
+                                InkWell(
+                                  onTap: () {
+                                    if (_selectedTimeframe != '15m') {
+                                      setState(() {
+                                        _selectedTimeframe = '15m';
+                                      });
+                                      _refreshAllOptionSignals(_selectedExpiryType, '15m');
+                                    }
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: _selectedTimeframe == '15m' ? const Color(0xFF6366F1) : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: const Text('15m', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+
+                          // Gemini AI Strategy Button
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF6366F1),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            onPressed: _isRunningAIAgent ? null : _showAIMarketStrategyDialog,
+                            icon: _isRunningAIAgent
+                                ? const SizedBox(width: 10, height: 10, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                : const Icon(Icons.smart_toy, size: 13),
+                            label: Text(
+                              _isRunningAIAgent ? '...' : 'Gemini AI',
+                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+
+                          // Refresh All Button
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0284C7),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            onPressed: _isRefreshingAll ? null : () => _refreshAllOptionSignals(),
+                            icon: _isRefreshingAll
+                                ? const SizedBox(
+                                    width: 10,
+                                    height: 10,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  )
+                                : const Icon(Icons.refresh, size: 13),
+                            label: Text(
+                              _isRefreshingAll ? '...' : 'Scan All',
+                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -718,6 +1021,192 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     }),
                 ],
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGlobalRadarBanner() {
+    if (_globalRadarData == null) return const SizedBox.shrink();
+    final verdict = _globalRadarData!['global_verdict']?.toString() ?? 'Neutral';
+    final usStance = _globalRadarData!['us_stance']?.toString() ?? 'Neutral';
+    final ukStance = _globalRadarData!['uk_stance']?.toString() ?? 'Neutral';
+    final crude = _globalRadarData!['crude_stance']?.toString() ?? 'Normal';
+    final indices = (_globalRadarData!['indices'] as List<dynamic>?) ?? [];
+    final news = (_globalRadarData!['live_news'] as List<dynamic>?) ?? [];
+
+    final isBullish = verdict.toLowerCase().contains('bull');
+    final isBearish = verdict.toLowerCase().contains('bear');
+    final verdictColor = isBullish
+        ? const Color(0xFF10B981)
+        : isBearish
+            ? const Color(0xFFF43F5E)
+            : const Color(0xFFF59E0B);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF334155)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.public, color: Color(0xFF38BDF8), size: 16),
+                  SizedBox(width: 6),
+                  Text(
+                    'Global Radar & Macro News',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: verdictColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: verdictColor.withValues(alpha: 0.5)),
+                ),
+                child: Text(
+                  verdict,
+                  style: TextStyle(
+                    color: verdictColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _buildStanceChip('US', usStance),
+              const SizedBox(width: 6),
+              _buildStanceChip('UK/EU', ukStance),
+              const SizedBox(width: 6),
+              _buildStanceChip('Crude', crude),
+            ],
+          ),
+          if (indices.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: indices.take(6).map((item) {
+                  final m = item as Map<String, dynamic>;
+                  final name = m['name']?.toString() ?? '';
+                  final pct = (m['change_pct'] as num?)?.toDouble() ?? 0.0;
+                  final isUp = pct >= 0;
+                  return Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFF334155)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          name,
+                          style: const TextStyle(
+                            color: Color(0xFF94A3B8),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${isUp ? "+" : ""}${pct.toStringAsFixed(2)}%',
+                          style: TextStyle(
+                            color: isUp ? const Color(0xFF34D399) : const Color(0xFFF43F5E),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+          if (news.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F172A).withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.newspaper, color: Color(0xFF818CF8), size: 12),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      news.first['headline']?.toString() ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 10),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStanceChip(String label, String stance) {
+    final isBull = stance.toLowerCase().contains('bull');
+    final isBear = stance.toLowerCase().contains('bear') || stance.toLowerCase().contains('high');
+    final col = isBull
+        ? const Color(0xFF10B981)
+        : isBear
+            ? const Color(0xFFF43F5E)
+            : const Color(0xFFF59E0B);
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F172A),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: col.withValues(alpha: 0.4)),
+        ),
+        child: Column(
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF64748B),
+                fontSize: 9,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 1),
+            Text(
+              stance,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: col, fontSize: 10, fontWeight: FontWeight.bold),
             ),
           ],
         ),

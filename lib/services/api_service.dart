@@ -113,16 +113,18 @@ class ApiService {
     throw Exception('Failed to load live overview: ${response.statusCode}');
   }
 
-  // 3. 5-Min Option Indicator Signal (Dual level & Multi-Expiry & Strike Selection)
+  // 3. 5-Min / 15-Min Option Indicator Signal (Dual level & Multi-Expiry & Strike Selection)
   Future<OptionIndicator5m> getOptionIndicatorSignal([
     String symbol = 'NIFTY 50',
     String expiryType = 'current',
     int? strike,
     String? optionType,
+    String timeframe = '5m',
   ]) async {
     final queryParams = <String, String>{
       'symbol': symbol,
       'expiry_type': expiryType,
+      'timeframe': timeframe,
     };
     if (strike != null) {
       queryParams['strike'] = strike.toString();
@@ -139,9 +141,13 @@ class ApiService {
   }
 
   // 3b. All Option Signals Concurrently
-  Future<Map<String, dynamic>> getAllOptionSignals({String expiryType = 'current'}) async {
+  Future<Map<String, dynamic>> getAllOptionSignals({
+    String expiryType = 'current',
+    String timeframe = '5m',
+  }) async {
     final response = await _safeGet('/market/all-option-signals', queryParams: {
       'expiry_type': expiryType,
+      'timeframe': timeframe,
     });
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -154,11 +160,43 @@ class ApiService {
         'status': data['status'],
         'timestamp': data['timestamp'] ?? '',
         'valid_until': data['valid_until'] ?? '',
+        'timeframe': data['timeframe'] ?? '5 Minute',
         'total_markets': data['total_markets'] ?? signalsMap.length,
         'signals': signalsMap,
       };
     }
     throw Exception('Failed to load all option signals: ${response.statusCode}');
+  }
+
+  // 3c. Global Market Radar (US, UK/Europe, Asia, Crude, USD/INR, News Tally)
+  Future<Map<String, dynamic>> getGlobalRadar() async {
+    final response = await _safeGet('/market/global-radar');
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['data'] as Map<String, dynamic>;
+    }
+    throw Exception('Failed to load global market radar: ${response.statusCode}');
+  }
+
+  // 3d. AI Live Market Strategy Agent (Gemini + Angel One + Technicals)
+  Future<Map<String, dynamic>> getAIMarketStrategy({
+    String symbol = 'NIFTY 50',
+    String timeframe = '5m',
+    String expiryType = 'current',
+  }) async {
+    final response = await _safePost(
+      '/market/ai-strategy-agent',
+      body: {
+        'symbol': symbol,
+        'timeframe': timeframe,
+        'expiry_type': expiryType,
+      },
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    final error = jsonDecode(response.body);
+    throw Exception(error['detail'] ?? 'Failed to execute AI market strategy agent');
   }
 
   // 4. Analyses List
