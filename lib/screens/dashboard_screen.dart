@@ -34,7 +34,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _selectedSymbol = 'NIFTY 50';
   String _selectedExpiryType = 'current';
   int? _selectedStrike;
-  final List<String> _supportedSymbols = ['NIFTY 50', 'BANK NIFTY', 'FINNIFTY'];
+  final List<String> _supportedSymbols = ['NIFTY 50', 'BANK NIFTY', 'SENSEX', 'FINNIFTY', 'MIDCPNIFTY'];
+  Map<String, OptionIndicator5m> _allOptionSignals = {};
+  String _lastEvaluatedAt = '';
+  String _lastValidUntil = '';
+  bool _isRefreshingAll = false;
 
   @override
   void initState() {
@@ -56,7 +60,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               indices: [],
               heavyweights: [],
             )),
-        _api.getOptionIndicatorSignal(_selectedSymbol, _selectedExpiryType).then<OptionIndicator5m?>((v) => v).catchError((e) => null),
+        _api.getAllOptionSignals(expiryType: _selectedExpiryType).catchError((e) => <String, dynamic>{}),
         _api.getStats().catchError((e) => DashboardStats(
               totalAnalyses: 0,
               bullishScenarios: 0,
@@ -74,12 +78,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ]);
 
       if (mounted) {
+        final allSignalsData = results[1] as Map<String, dynamic>;
+        final signalsMap = (allSignalsData['signals'] as Map<String, OptionIndicator5m>?) ?? {};
+
         setState(() {
           _liveMarket = results[0] as LiveMarketOverviewResponse?;
-          _optionSignal = results[1] as OptionIndicator5m?;
-          if (_optionSignal != null && _optionSignal!.activeExpiry.isNotEmpty) {
-            _selectedExpiryType = _optionSignal!.activeExpiry;
+          _allOptionSignals = signalsMap;
+          _lastEvaluatedAt = allSignalsData['timestamp']?.toString() ?? '';
+          _lastValidUntil = allSignalsData['valid_until']?.toString() ?? '';
+
+          if (signalsMap.containsKey(_selectedSymbol)) {
+            _optionSignal = signalsMap[_selectedSymbol];
+          } else if (signalsMap.containsKey('NIFTY 50')) {
+            _selectedSymbol = 'NIFTY 50';
+            _optionSignal = signalsMap['NIFTY 50'];
+          } else if (signalsMap.isNotEmpty) {
+            _selectedSymbol = signalsMap.keys.first;
+            _optionSignal = signalsMap.values.first;
           }
+
+          if (_optionSignal != null) {
+            if (_optionSignal!.selectedStrike != null) {
+              _selectedStrike = _optionSignal!.selectedStrike;
+            }
+            if (_optionSignal!.activeExpiry.isNotEmpty) {
+              _selectedExpiryType = _optionSignal!.activeExpiry;
+            }
+          }
+
           _stats = results[2] as DashboardStats?;
           _recentAnalyses = (results[3] as List<AnalysisItem>?) ?? [];
           final settings = results[4] as SettingsStatus?;
@@ -91,7 +117,58 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (mounted) {
         setState(() {
           _errorMessage = e.toString();
+          _isLoading = false;
         });
+      }
+    }
+  }
+
+  Future<void> _refreshAllOptionSignals([String? expiryType]) async {
+    if (expiryType != null) {
+      setState(() {
+        _selectedExpiryType = expiryType;
+      });
+    }
+    setState(() {
+      _isRefreshingAll = true;
+    });
+
+    try {
+      final res = await _api.getAllOptionSignals(expiryType: _selectedExpiryType);
+      final signals = (res['signals'] as Map<String, OptionIndicator5m>?) ?? {};
+
+      if (mounted) {
+        setState(() {
+          _allOptionSignals = signals;
+          _lastEvaluatedAt = res['timestamp']?.toString() ?? '';
+          _lastValidUntil = res['valid_until']?.toString() ?? '';
+
+          if (signals.containsKey(_selectedSymbol)) {
+            _optionSignal = signals[_selectedSymbol];
+          } else if (signals.containsKey('NIFTY 50')) {
+            _selectedSymbol = 'NIFTY 50';
+            _optionSignal = signals['NIFTY 50'];
+          }
+
+          if (_optionSignal != null) {
+            if (_optionSignal!.selectedStrike != null) {
+              _selectedStrike = _optionSignal!.selectedStrike;
+            }
+            if (_optionSignal!.activeExpiry.isNotEmpty) {
+              _selectedExpiryType = _optionSignal!.activeExpiry;
+            }
+          }
+          _isRefreshingAll = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isRefreshingAll = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to refresh all markets: $e')),
+        );
       }
     }
   }
@@ -116,6 +193,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (mounted) {
         setState(() {
           _optionSignal = sig;
+          _allOptionSignals[_selectedSymbol] = sig;
           if (sig.selectedStrike != null) {
             _selectedStrike = sig.selectedStrike;
           }
@@ -301,49 +379,174 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   const SizedBox(height: 16),
 
-                  // Option Scalp & Confluence Header + Symbol Switcher
+                  // Option Scalp & Confluence Header + Symbol Switcher & Refresh All Markets
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        '5-Min Option Scalp & Confluence',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1E293B),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFF334155)),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: _selectedSymbol,
-                            dropdownColor: const Color(0xFF1E293B),
-                            style: const TextStyle(
-                              color: Color(0xFF38BDF8),
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '5-Min Option Scalp & Confluence',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
                             ),
-                            items: _supportedSymbols.map((s) {
-                              return DropdownMenuItem(value: s, child: Text(s));
-                            }).toList(),
-                            onChanged: (val) {
-                              if (val != null) {
-                                setState(() {
-                                  _selectedSymbol = val;
-                                });
-                                _refreshOptionSignal();
-                              }
-                            },
                           ),
+                          if (_lastValidUntil.isNotEmpty)
+                            Text(
+                              'Horizon: $_lastEvaluatedAt → $_lastValidUntil',
+                              style: const TextStyle(
+                                color: Color(0xFF38BDF8),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                        ],
+                      ),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0284C7),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        onPressed: _isRefreshingAll ? null : () => _refreshAllOptionSignals(),
+                        icon: _isRefreshingAll
+                            ? const SizedBox(
+                                width: 12,
+                                height: 12,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.refresh, size: 14),
+                        label: Text(
+                          _isRefreshingAll ? 'Scanning...' : 'Refresh All',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                         ),
                       ),
                     ],
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // Horizontal Quick Market Switcher Strip (All 5 Indian Indices)
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: _supportedSymbols.map((sym) {
+                        final isSelected = sym == _selectedSymbol;
+                        final mSig = _allOptionSignals[sym];
+                        final isCall = mSig?.direction == 'CALL';
+                        final isPut = mSig?.direction == 'PUT';
+                        final badgeColor = isCall
+                            ? const Color(0xFF10B981)
+                            : isPut
+                                ? const Color(0xFFF43F5E)
+                                : const Color(0xFFF59E0B);
+                        final decisionText = isCall
+                            ? 'CALL'
+                            : isPut
+                                ? 'PUT'
+                                : (mSig != null ? 'WAIT' : '...');
+                        final ltp = mSig?.tradeExecution?.currentLtp;
+
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: InkWell(
+                            onTap: () {
+                              setState(() {
+                                _selectedSymbol = sym;
+                                if (_allOptionSignals.containsKey(sym)) {
+                                  _optionSignal = _allOptionSignals[sym];
+                                  if (_optionSignal?.selectedStrike != null) {
+                                    _selectedStrike = _optionSignal!.selectedStrike;
+                                  }
+                                } else {
+                                  _refreshOptionSignal();
+                                }
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? badgeColor.withValues(alpha: 0.2)
+                                    : const Color(0xFF1E293B),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: isSelected ? badgeColor : const Color(0xFF334155),
+                                  width: isSelected ? 1.5 : 1,
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        sym,
+                                        style: TextStyle(
+                                          color: isSelected ? Colors.white : const Color(0xFFCBD5E1),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: badgeColor.withValues(alpha: 0.25),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          decisionText,
+                                          style: TextStyle(
+                                            color: badgeColor,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (mSig != null) ...[
+                                    const SizedBox(height: 2),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          mSig.strikeSuggestion,
+                                          style: const TextStyle(
+                                            color: Color(0xFF94A3B8),
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        if (ltp != null && ltp > 0) ...[
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            '₹$ltp',
+                                            style: const TextStyle(
+                                              color: Color(0xFF38BDF8),
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
                   ),
 
                   const SizedBox(height: 10),
@@ -355,7 +558,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       selectedExpiryType: _selectedExpiryType,
                       onExpiryChanged: (type) => _refreshOptionSignal(type, _selectedStrike),
                       onStrikeChanged: (strike) => _refreshOptionSignal(_selectedExpiryType, strike),
-                      onRefresh: () => _refreshOptionSignal(),
+                      onRefresh: () => _refreshAllOptionSignals(),
                     )
                   else if (_isLoading)
                     const Center(

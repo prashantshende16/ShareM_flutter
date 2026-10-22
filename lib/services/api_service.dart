@@ -138,6 +138,29 @@ class ApiService {
     throw Exception('Failed to load option signal: ${response.statusCode}');
   }
 
+  // 3b. All Option Signals Concurrently
+  Future<Map<String, dynamic>> getAllOptionSignals({String expiryType = 'current'}) async {
+    final response = await _safeGet('/market/all-option-signals', queryParams: {
+      'expiry_type': expiryType,
+    });
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      final signalsMap = <String, OptionIndicator5m>{};
+      final rawSignals = data['signals'] as Map<String, dynamic>? ?? {};
+      rawSignals.forEach((key, val) {
+        signalsMap[key] = OptionIndicator5m.fromJson(val as Map<String, dynamic>);
+      });
+      return {
+        'status': data['status'],
+        'timestamp': data['timestamp'] ?? '',
+        'valid_until': data['valid_until'] ?? '',
+        'total_markets': data['total_markets'] ?? signalsMap.length,
+        'signals': signalsMap,
+      };
+    }
+    throw Exception('Failed to load all option signals: ${response.statusCode}');
+  }
+
   // 4. Analyses List
   Future<List<AnalysisItem>> getAnalyses({String? symbol, String? bias}) async {
     final queryParams = <String, String>{};

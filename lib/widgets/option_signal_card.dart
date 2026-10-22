@@ -450,34 +450,58 @@ class OptionSignalCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFF0B132B).withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(8),
+                color: const Color(0xFF0B132B).withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF334155)),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Column(
                 children: [
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Icon(Icons.access_time, size: 14, color: Color(0xFF94A3B8)),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Signal At: ${signal.generatedAt.isNotEmpty ? signal.generatedAt : "Real-Time"}',
-                        style: const TextStyle(
-                          color: Color(0xFF94A3B8),
-                          fontSize: 11,
-                        ),
+                      Row(
+                        children: [
+                          const Icon(Icons.access_time, size: 14, color: Color(0xFF38BDF8)),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Hit Time: ${signal.generatedAt.isNotEmpty ? signal.generatedAt : "Just Now"}',
+                            style: const TextStyle(
+                              color: Color(0xFFE2E8F0),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          const Icon(Icons.hourglass_top, size: 14, color: Color(0xFF10B981)),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Valid Till: ${signal.validUntil.isNotEmpty ? signal.validUntil : "Next 30 Mins"}',
+                            style: const TextStyle(
+                              color: Color(0xFF34D399),
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
+                  const SizedBox(height: 4),
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Icon(Icons.timer_outlined, size: 14, color: Color(0xFFF59E0B)),
-                      const SizedBox(width: 4),
+                      const Text(
+                        'Next 30-Min Horizon Active',
+                        style: TextStyle(color: Color(0xFF64748B), fontSize: 10),
+                      ),
                       Text(
-                        'Holding: ${signal.expectedHoldingTime}',
+                        'Hold: ${signal.expectedHoldingTime}',
                         style: const TextStyle(
                           color: Color(0xFFF59E0B),
-                          fontSize: 11,
+                          fontSize: 10,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
