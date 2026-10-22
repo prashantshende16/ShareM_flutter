@@ -42,6 +42,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isRefreshingAll = false;
   Map<String, dynamic>? _globalRadarData;
   bool _isRunningAIAgent = false;
+  Map<String, dynamic>? _profileMarginData;
+  List<dynamic> _trades = [];
+  bool _isExecutingBatch = false;
+  int? _actionLoadingTradeId;
 
   @override
   void initState() {
@@ -79,6 +83,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               marketDataStatus: 'Connected',
             )),
         _api.getGlobalRadar().catchError((e) => <String, dynamic>{}),
+        _api.getProfileMargin().catchError((e) => <String, dynamic>{}),
+        _api.getTrades().catchError((e) => <dynamic>[]),
       ]);
 
       if (mounted) {
@@ -117,6 +123,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           final radarRes = results[5] as Map<String, dynamic>?;
           if (radarRes != null && radarRes.isNotEmpty) {
             _globalRadarData = radarRes;
+          }
+          final pmRes = results[6] as Map<String, dynamic>?;
+          if (pmRes != null && pmRes.isNotEmpty) {
+            _profileMarginData = pmRes;
+          }
+          final trRes = results[7] as List<dynamic>?;
+          if (trRes != null) {
+            _trades = trRes;
           }
           _isLoading = false;
         });
@@ -516,6 +530,195 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<void> _execute1ClickBatch() async {
+    setState(() {
+      _isExecutingBatch = true;
+    });
+
+    try {
+      final res = await _api.oneClickBatchAddTrades(
+        indices: ['NIFTY 50', 'BANK NIFTY', 'SENSEX', 'FINNIFTY'],
+        timeframe: _selectedTimeframe,
+        expiryType: _selectedExpiryType,
+        lots: 1,
+        tradeMode: 'PAPER',
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _isExecutingBatch = false;
+      });
+
+      final totalMargin = res['total_margin_required'] ?? 0;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF10B981),
+          content: Text('⚡ Added 4 Trades (1 Lot each)! Required Margin: ₹$totalMargin'),
+        ),
+      );
+      _loadDashboardData();
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isExecutingBatch = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFFF43F5E),
+            content: Text('Failed 1-Click execution: $e'),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _bookTarget1(int tradeId) async {
+    setState(() {
+      _actionLoadingTradeId = tradeId;
+    });
+    try {
+      final res = await _api.bookTarget1(tradeId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF10B981),
+            content: Text(res['message']?.toString() ?? '🎯 Target 1 Booked!'),
+          ),
+        );
+      }
+      _loadDashboardData();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFFF43F5E),
+            content: Text('Failed to book Target 1: $e'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _actionLoadingTradeId = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _bookTarget2(int tradeId) async {
+    setState(() {
+      _actionLoadingTradeId = tradeId;
+    });
+    try {
+      final res = await _api.bookTarget2(tradeId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF6366F1),
+            content: Text(res['message']?.toString() ?? '🏆 Target 2 Booked!'),
+          ),
+        );
+      }
+      _loadDashboardData();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFFF43F5E),
+            content: Text('Failed to book Target 2: $e'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _actionLoadingTradeId = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _closeTrade(int tradeId) async {
+    setState(() {
+      _actionLoadingTradeId = tradeId;
+    });
+    try {
+      final res = await _api.closeTrade(tradeId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF64748B),
+            content: Text(res['message']?.toString() ?? 'Position closed'),
+          ),
+        );
+      }
+      _loadDashboardData();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to close position: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _actionLoadingTradeId = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteTrade(int tradeId) async {
+    try {
+      await _api.deleteTrade(tradeId);
+      _loadDashboardData();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete trade: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _clearAllTrades() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: const Text('Clear All Trades?', style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'This will clear all active and past trade records.',
+          style: TextStyle(color: Color(0xFF94A3B8)),
+        ),
+        actions: [
+          TextButton(
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF94A3B8))),
+            onPressed: () => Navigator.pop(ctx, false),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF43F5E)),
+            child: const Text('Clear', style: TextStyle(color: Colors.white)),
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _api.clearAllTrades();
+        _loadDashboardData();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to clear: $e')),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -600,6 +803,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 children: [
                   // Global Radar & Macro Banner
                   if (_globalRadarData != null) _buildGlobalRadarBanner(),
+
+                  // Profile & Margin Card
+                  if (_profileMarginData != null) _buildProfileMarginCard(),
+
+                  // 1-Click Add 4 Trades Hero Action Card
+                  _buildOneClickBatchTradeBanner(),
+
+                  // Active Positions & Trade Manager
+                  if (_trades.isNotEmpty) _buildActiveTradesList(),
 
                   // Quick Stats Row
                   if (_stats != null) _buildStatsGrid(),
@@ -1024,6 +1236,395 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildProfileMarginCard() {
+    if (_profileMarginData == null) return const SizedBox.shrink();
+    final clientName = _profileMarginData!['client_name']?.toString() ?? 'PRASHANT VISHNU SHENDE';
+    final clientCode = _profileMarginData!['client_code']?.toString() ?? 'P261591';
+    final paper = _profileMarginData!['paper_portfolio'] as Map<String, dynamic>? ?? {};
+    final availMargin = (paper['available_balance'] as num?)?.toDouble() ?? 500000.0;
+    final blockedMargin = (paper['margin_blocked'] as num?)?.toDouble() ?? 0.0;
+    final unrealizedPnl = (paper['unrealized_pnl'] as num?)?.toDouble() ?? 0.0;
+    final isUnrealizedUp = unrealizedPnl >= 0;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF334155)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0284C7).withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Icon(Icons.account_balance_wallet, color: Color(0xFF38BDF8), size: 16),
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        clientName,
+                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        '$clientCode • Angel One SmartAPI',
+                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.check_circle, color: Color(0xFF10B981), size: 10),
+                    SizedBox(width: 4),
+                    Text('F&O Active', style: TextStyle(color: Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Available Margin', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 9)),
+                      const SizedBox(height: 2),
+                      Text('₹${availMargin.toStringAsFixed(0)}', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Margin Blocked', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 9)),
+                      const SizedBox(height: 2),
+                      Text('₹${blockedMargin.toStringAsFixed(0)}', style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 12, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Live P&L', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 9)),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${isUnrealizedUp ? "+" : ""}₹${unrealizedPnl.toStringAsFixed(1)}',
+                        style: TextStyle(
+                          color: isUnrealizedUp ? const Color(0xFF34D399) : const Color(0xFFF43F5E),
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOneClickBatchTradeBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF312E81).withValues(alpha: 0.5),
+            const Color(0xFF064E3B).withValues(alpha: 0.5),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.bolt, color: Color(0xFF34D399), size: 18),
+                  SizedBox(width: 6),
+                  Text(
+                    '1-Click Add 4 Trades',
+                    style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text('1 Lot Each', style: TextStyle(color: Color(0xFF34D399), fontSize: 9, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'NIFTY 50 • SENSEX • BANK NIFTY • FINNIFTY simultaneous buy orders with automatic Stop Loss & Target 1 booking.',
+            style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 11),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: _isExecutingBatch ? null : _execute1ClickBatch,
+              icon: _isExecutingBatch
+                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                  : const Icon(Icons.flash_on, size: 16),
+              label: Text(
+                _isExecutingBatch ? 'Executing 4 Trades...' : '⚡ Add 4 Trades Now (1 Lot)',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActiveTradesList() {
+    final active = _trades.where((t) => t['status'] == 'ACTIVE' || t['status'] == 'TARGET_1_BOOKED').toList();
+    if (active.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF334155)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.trending_up, color: Color(0xFF34D399), size: 16),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Active F&O Positions (${active.length})',
+                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              TextButton(
+                onPressed: _clearAllTrades,
+                child: const Text('Clear All', style: TextStyle(color: Color(0xFFF43F5E), fontSize: 11, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ...active.map((t) {
+            final tradeId = t['id'] as int? ?? 0;
+            final isCall = (t['option_type']?.toString() ?? 'CE') == 'CE';
+            final isT1Booked = t['status'] == 'TARGET_1_BOOKED';
+            final pnl = (t['unrealized_pnl'] as num?)?.toDouble() ?? 0.0;
+            final isProfit = pnl >= 0;
+            final isLoadingAction = _actionLoadingTradeId == tradeId;
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F172A),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: isT1Booked
+                      ? const Color(0xFF10B981).withValues(alpha: 0.6)
+                      : const Color(0xFF334155),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: (isCall ? const Color(0xFF10B981) : const Color(0xFFF43F5E)).withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              '${t['action'] ?? "BUY"} ${t['option_type'] ?? "CE"}',
+                              style: TextStyle(
+                                color: isCall ? const Color(0xFF34D399) : const Color(0xFFFB7185),
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '${t['lots'] ?? 1} Lot (${t['quantity'] ?? 25} Qty)',
+                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                          ),
+                          if (isT1Booked) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text('T1 Booked', style: TextStyle(color: Color(0xFF10B981), fontSize: 8, fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ],
+                      ),
+                      Text(
+                        '${isProfit ? "+" : ""}₹${pnl.toStringAsFixed(1)}',
+                        style: TextStyle(
+                          color: isProfit ? const Color(0xFF34D399) : const Color(0xFFF43F5E),
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    t['contract_name']?.toString() ?? '',
+                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Entry: ₹${t['entry_price']}', style: const TextStyle(color: Color(0xFF34D399), fontSize: 10, fontWeight: FontWeight.bold)),
+                      Text('SL: ₹${t['stop_loss']}', style: const TextStyle(color: Color(0xFFF43F5E), fontSize: 10, fontWeight: FontWeight.bold)),
+                      Text('T1: ₹${t['target_1']}', style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold)),
+                      Text('T2: ₹${t['target_2']}', style: const TextStyle(color: Color(0xFF818CF8), fontSize: 10, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      if (!isT1Booked)
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF10B981),
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            ),
+                            onPressed: isLoadingAction ? null : () => _bookTarget1(tradeId),
+                            icon: const Icon(Icons.check_circle_outline, size: 12),
+                            label: const Text('Book T1', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                          ),
+                        )
+                      else
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF6366F1),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            ),
+                            onPressed: isLoadingAction ? null : () => _bookTarget2(tradeId),
+                            icon: const Icon(Icons.emoji_events, size: 12),
+                            label: const Text('Book T2', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      const SizedBox(width: 6),
+                      OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFF43F5E),
+                          side: const BorderSide(color: Color(0xFFF43F5E)),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        ),
+                        onPressed: isLoadingAction ? null : () => _closeTrade(tradeId),
+                        child: const Text('Exit', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                      ),
+                      const SizedBox(width: 4),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, size: 16, color: Color(0xFF64748B)),
+                        onPressed: isLoadingAction ? null : () => _deleteTrade(tradeId),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
       ),
     );
   }

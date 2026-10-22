@@ -376,4 +376,90 @@ class ApiService {
     final response = await _safePost('/settings/test-angel-one');
     return jsonDecode(response.body);
   }
+
+  // 10. Trades & Margin Management
+  Future<Map<String, dynamic>> getProfileMargin() async {
+    final response = await _safeGet('/trades/profile-margin');
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to load profile margin: ${response.statusCode}');
+  }
+
+  Future<List<dynamic>> getTrades({String? status}) async {
+    String endpoint = '/trades';
+    if (status != null && status.isNotEmpty) {
+      endpoint += '?status=${Uri.encodeComponent(status)}';
+    }
+    final response = await _safeGet(endpoint);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as List<dynamic>;
+    }
+    throw Exception('Failed to load trades: ${response.statusCode}');
+  }
+
+  Future<Map<String, dynamic>> oneClickBatchAddTrades({
+    List<String>? indices,
+    String timeframe = '5m',
+    String expiryType = 'current',
+    int lots = 1,
+    String tradeMode = 'PAPER',
+  }) async {
+    final payload = {
+      'indices': indices ?? ['NIFTY 50', 'BANK NIFTY', 'SENSEX', 'FINNIFTY'],
+      'timeframe': timeframe,
+      'expiry_type': expiryType,
+      'lots': lots,
+      'trade_mode': tradeMode,
+    };
+    final response = await _safePost('/trades/one-click-batch', body: payload);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    final err = jsonDecode(response.body);
+    throw Exception(err['detail'] ?? 'Failed to execute 1-Click batch trades');
+  }
+
+  Future<Map<String, dynamic>> bookTarget1(int tradeId) async {
+    final response = await _safePost('/trades/$tradeId/book-target-1');
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    final err = jsonDecode(response.body);
+    throw Exception(err['detail'] ?? 'Failed to book Target 1');
+  }
+
+  Future<Map<String, dynamic>> bookTarget2(int tradeId) async {
+    final response = await _safePost('/trades/$tradeId/book-target-2');
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    final err = jsonDecode(response.body);
+    throw Exception(err['detail'] ?? 'Failed to book Target 2');
+  }
+
+  Future<Map<String, dynamic>> closeTrade(int tradeId) async {
+    final response = await _safePost('/trades/$tradeId/close');
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    final err = jsonDecode(response.body);
+    throw Exception(err['detail'] ?? 'Failed to close trade');
+  }
+
+  Future<Map<String, dynamic>> deleteTrade(int tradeId) async {
+    final response = await _safeDelete('/trades/$tradeId');
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to delete trade: ${response.statusCode}');
+  }
+
+  Future<Map<String, dynamic>> clearAllTrades() async {
+    final response = await _safeDelete('/trades');
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to clear trades: ${response.statusCode}');
+  }
 }
