@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/analysis_models.dart';
 import '../models/market_models.dart';
@@ -46,11 +47,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<dynamic> _trades = [];
   bool _isExecutingBatch = false;
   int? _actionLoadingTradeId;
+  Timer? _liveTradeTimer;
 
   @override
   void initState() {
     super.initState();
     _loadDashboardData();
+    _liveTradeTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      _refreshLiveTradesOnly();
+    });
+  }
+
+  @override
+  void dispose() {
+    _liveTradeTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refreshLiveTradesOnly() async {
+    if (!mounted) return;
+    try {
+      final results = await Future.wait([
+        _api.getProfileMargin().catchError((e) => <String, dynamic>{}),
+        _api.getTrades().catchError((e) => <dynamic>[]),
+      ]);
+      if (!mounted) return;
+      final pm = results[0] as Map<String, dynamic>?;
+      final tr = results[1] as List<dynamic>?;
+      if (pm != null && pm.isNotEmpty) {
+        _profileMarginData = pm;
+      }
+      if (tr != null) {
+        _trades = tr;
+      }
+      if (mounted) setState(() {});
+    } catch (_) {}
   }
 
   Future<void> _loadDashboardData() async {
