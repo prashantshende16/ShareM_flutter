@@ -33,6 +33,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   String _selectedSymbol = 'NIFTY 50';
   String _selectedExpiryType = 'current';
+  int? _selectedStrike;
   final List<String> _supportedSymbols = ['NIFTY 50', 'BANK NIFTY', 'FINNIFTY'];
 
   @override
@@ -95,17 +96,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  Future<void> _refreshOptionSignal([String? expiryType]) async {
+  Future<void> _refreshOptionSignal([String? expiryType, int? strike]) async {
     if (expiryType != null) {
       setState(() {
         _selectedExpiryType = expiryType;
       });
     }
+    if (strike != null) {
+      setState(() {
+        _selectedStrike = strike;
+      });
+    }
     try {
-      final sig = await _api.getOptionIndicatorSignal(_selectedSymbol, _selectedExpiryType);
+      final sig = await _api.getOptionIndicatorSignal(
+        _selectedSymbol,
+        _selectedExpiryType,
+        _selectedStrike,
+      );
       if (mounted) {
         setState(() {
           _optionSignal = sig;
+          if (sig.selectedStrike != null) {
+            _selectedStrike = sig.selectedStrike;
+          }
           if (sig.activeExpiry.isNotEmpty) {
             _selectedExpiryType = sig.activeExpiry;
           }
@@ -340,7 +353,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     OptionSignalCard(
                       signal: _optionSignal!,
                       selectedExpiryType: _selectedExpiryType,
-                      onExpiryChanged: (type) => _refreshOptionSignal(type),
+                      onExpiryChanged: (type) => _refreshOptionSignal(type, _selectedStrike),
+                      onStrikeChanged: (strike) => _refreshOptionSignal(_selectedExpiryType, strike),
                       onRefresh: () => _refreshOptionSignal(),
                     )
                   else if (_isLoading)

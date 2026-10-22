@@ -113,15 +113,24 @@ class ApiService {
     throw Exception('Failed to load live overview: ${response.statusCode}');
   }
 
-  // 3. 5-Min Option Indicator Signal (Dual level & Multi-Expiry)
+  // 3. 5-Min Option Indicator Signal (Dual level & Multi-Expiry & Strike Selection)
   Future<OptionIndicator5m> getOptionIndicatorSignal([
     String symbol = 'NIFTY 50',
     String expiryType = 'current',
+    int? strike,
+    String? optionType,
   ]) async {
-    final response = await _safeGet('/market/option-signal', queryParams: {
+    final queryParams = <String, String>{
       'symbol': symbol,
       'expiry_type': expiryType,
-    });
+    };
+    if (strike != null) {
+      queryParams['strike'] = strike.toString();
+    }
+    if (optionType != null && optionType.isNotEmpty) {
+      queryParams['option_type'] = optionType;
+    }
+    final response = await _safeGet('/market/option-signal', queryParams: queryParams);
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       return OptionIndicator5m.fromJson(data['signal'] as Map<String, dynamic>);

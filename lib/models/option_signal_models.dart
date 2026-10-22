@@ -85,6 +85,32 @@ class OptionExpiryItem {
   }
 }
 
+class OptionStrikeItem {
+  final int strike;
+  final String label;
+  final String tag;
+  final bool isAtm;
+  final bool isSelected;
+
+  OptionStrikeItem({
+    required this.strike,
+    required this.label,
+    required this.tag,
+    required this.isAtm,
+    required this.isSelected,
+  });
+
+  factory OptionStrikeItem.fromJson(Map<String, dynamic> json) {
+    return OptionStrikeItem(
+      strike: (json['strike'] as num?)?.toInt() ?? 0,
+      label: json['label']?.toString() ?? '',
+      tag: json['tag']?.toString() ?? '',
+      isAtm: json['is_atm'] as bool? ?? false,
+      isSelected: json['is_selected'] as bool? ?? false,
+    );
+  }
+}
+
 class TradeExecution {
   final String contractName;
   final int lotSize;
@@ -100,6 +126,12 @@ class TradeExecution {
   final double target1Profit;
   final double target2Profit;
   final String riskRewardRatio;
+  final bool isLiveAngelOne;
+  final double dayHigh;
+  final double dayLow;
+  final double dayClose;
+  final double dayOpen;
+  final String tradingsymbol;
 
   TradeExecution({
     required this.contractName,
@@ -116,6 +148,12 @@ class TradeExecution {
     required this.target1Profit,
     required this.target2Profit,
     required this.riskRewardRatio,
+    this.isLiveAngelOne = false,
+    this.dayHigh = 0.0,
+    this.dayLow = 0.0,
+    this.dayClose = 0.0,
+    this.dayOpen = 0.0,
+    this.tradingsymbol = '',
   });
 
   factory TradeExecution.fromJson(Map<String, dynamic> json) {
@@ -134,6 +172,12 @@ class TradeExecution {
       target1Profit: (json['target_1_profit'] as num?)?.toDouble() ?? 0.0,
       target2Profit: (json['target_2_profit'] as num?)?.toDouble() ?? 0.0,
       riskRewardRatio: json['risk_reward_ratio']?.toString() ?? '1:1.5',
+      isLiveAngelOne: json['is_live_angel_one'] as bool? ?? false,
+      dayHigh: (json['day_high'] as num?)?.toDouble() ?? 0.0,
+      dayLow: (json['day_low'] as num?)?.toDouble() ?? 0.0,
+      dayClose: (json['day_close'] as num?)?.toDouble() ?? 0.0,
+      dayOpen: (json['day_open'] as num?)?.toDouble() ?? 0.0,
+      tradingsymbol: json['tradingsymbol']?.toString() ?? '',
     );
   }
 }
@@ -198,6 +242,10 @@ class OptionIndicator5m {
   final String? nextExpiry;
   final bool isTodayExpiry;
   final List<OptionExpiryItem> availableExpiries;
+  final List<OptionStrikeItem> availableStrikes;
+  final int? selectedStrike;
+  final String? selectedOptionType;
+  final bool isLiveAngelOne;
   final OptionPremiumLevels? optionPremium;
   final IndexSpotLevels? indexSpot;
   final TradeExecution? tradeExecution;
@@ -232,6 +280,10 @@ class OptionIndicator5m {
     this.nextExpiry,
     this.isTodayExpiry = false,
     this.availableExpiries = const [],
+    this.availableStrikes = const [],
+    this.selectedStrike,
+    this.selectedOptionType,
+    this.isLiveAngelOne = false,
     this.optionPremium,
     this.indexSpot,
     this.tradeExecution,
@@ -271,6 +323,13 @@ class OptionIndicator5m {
               ?.map((e) => OptionExpiryItem.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
+      availableStrikes: (json['available_strikes'] as List<dynamic>?)
+              ?.map((e) => OptionStrikeItem.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
+      selectedStrike: (json['selected_strike'] as num?)?.toInt(),
+      selectedOptionType: json['selected_option_type']?.toString(),
+      isLiveAngelOne: json['is_live_angel_one'] as bool? ?? false,
       optionPremium: json['option_premium'] != null
           ? OptionPremiumLevels.fromJson(
               json['option_premium'] as Map<String, dynamic>)

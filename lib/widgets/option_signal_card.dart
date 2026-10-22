@@ -5,6 +5,7 @@ class OptionSignalCard extends StatelessWidget {
   final OptionIndicator5m signal;
   final String selectedExpiryType;
   final ValueChanged<String>? onExpiryChanged;
+  final ValueChanged<int>? onStrikeChanged;
   final VoidCallback? onRefresh;
 
   const OptionSignalCard({
@@ -12,6 +13,7 @@ class OptionSignalCard extends StatelessWidget {
     required this.signal,
     this.selectedExpiryType = 'current',
     this.onExpiryChanged,
+    this.onStrikeChanged,
     this.onRefresh,
   });
 
@@ -345,6 +347,102 @@ class OptionSignalCard extends StatelessWidget {
                 ],
               ),
             ),
+
+            if (signal.availableStrikes.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF334155)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'CHOOSE STRIKE (ITM / ATM / OTM)',
+                          style: TextStyle(
+                            color: Color(0xFF64748B),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        Text(
+                          '${signal.selectedStrike ?? signal.strikeSuggestion}',
+                          style: const TextStyle(
+                            color: Color(0xFF38BDF8),
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: signal.availableStrikes.map((stk) {
+                          final isSelected = stk.isSelected || stk.strike == signal.selectedStrike;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: InkWell(
+                              onTap: () => onStrikeChanged?.call(stk.strike),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? const Color(0xFF2563EB)
+                                      : (stk.isAtm
+                                          ? const Color(0xFFD97706).withValues(alpha: 0.2)
+                                          : const Color(0xFF1E293B)),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? const Color(0xFF60A5FA)
+                                        : (stk.isAtm
+                                            ? const Color(0xFFFBBF24)
+                                            : const Color(0xFF334155)),
+                                  ),
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      '${stk.strike}',
+                                      style: TextStyle(
+                                        color: isSelected ? Colors.white : const Color(0xFFF1F5F9),
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Text(
+                                      stk.tag,
+                                      style: TextStyle(
+                                        color: isSelected ? Colors.white70 : const Color(0xFF94A3B8),
+                                        fontSize: 8,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
             const SizedBox(height: 12),
 
@@ -769,6 +867,29 @@ class OptionSignalCard extends StatelessWidget {
               ),
             ],
           ),
+
+          if (trade.isLiveAngelOne && (trade.dayClose > 0 || trade.dayHigh > 0)) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F172A),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF334155)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  Text('Close: ₹${trade.dayClose.toStringAsFixed(1)}',
+                      style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 10, fontWeight: FontWeight.bold)),
+                  Text('High: ₹${trade.dayHigh.toStringAsFixed(1)}',
+                      style: const TextStyle(color: Color(0xFF34D399), fontSize: 10, fontWeight: FontWeight.bold)),
+                  Text('Low: ₹${trade.dayLow.toStringAsFixed(1)}',
+                      style: const TextStyle(color: Color(0xFFFB7185), fontSize: 10, fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
