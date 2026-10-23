@@ -1452,7 +1452,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           const SizedBox(height: 6),
           const Text(
-            'NIFTY 50 • SENSEX • BANK NIFTY • FINNIFTY simultaneous buy orders with automatic Stop Loss & Target 1 booking.',
+            'SENSEX (20 Qty) • BANK NIFTY (60 Qty) • NIFTY (65 Qty) • FINNIFTY (65 Qty). Simultaneous buy orders with automatic SL & Target 1 booking.',
             style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 11),
           ),
           const SizedBox(height: 10),
