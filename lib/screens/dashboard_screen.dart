@@ -2397,7 +2397,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _showSurgeRadarSheet() {
     final macro = _surgeData?['macro_radar'] as Map<String, dynamic>?;
-    final suggestions = (_surgeData?['suggestions'] as List<dynamic>?) ?? [];
+    final allSuggestions = (_surgeData?['suggestions'] as List<dynamic>?) ?? [];
+    final availableDates = (_surgeData?['available_dates'] as List<dynamic>?) ?? [];
+    String selectedSurgeDate = 'TODAY';
 
     showModalBottomSheet(
       context: context,
@@ -2409,6 +2411,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (modalCtx, setModalState) {
+            final todayDateStr = _surgeData?['today_date']?.toString() ?? '';
+            final displayedSuggestions = allSuggestions.where((s) {
+              if (selectedSurgeDate == 'ALL') return true;
+              final d = s['detected_date']?.toString() ?? '';
+              if (selectedSurgeDate == 'TODAY') return d == todayDateStr || d.isEmpty;
+              return d == selectedSurgeDate || s['detected_date_label'] == selectedSurgeDate;
+            }).toList();
+
             return DraggableScrollableSheet(
               initialChildSize: 0.85,
               minChildSize: 0.5,
@@ -2502,20 +2512,74 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ],
                         ),
                       ),
+                    const SizedBox(height: 12),
+
+                    // Date Filter Chips Bar
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          InkWell(
+                            onTap: () => setModalState(() => selectedSurgeDate = 'TODAY'),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              margin: const EdgeInsets.only(right: 6),
+                              decoration: BoxDecoration(
+                                color: selectedSurgeDate == 'TODAY' ? const Color(0xFFD97706) : const Color(0xFF1E293B),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: selectedSurgeDate == 'TODAY' ? const Color(0xFFF59E0B) : const Color(0xFF334155)),
+                              ),
+                              child: const Text('⚡ Today', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                          ...availableDates.map((d) {
+                            final dateKey = d['date']?.toString() ?? '';
+                            final lbl = d['label']?.toString() ?? dateKey;
+                            final isSel = selectedSurgeDate == dateKey;
+                            return InkWell(
+                              onTap: () => setModalState(() => selectedSurgeDate = dateKey),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                margin: const EdgeInsets.only(right: 6),
+                                decoration: BoxDecoration(
+                                  color: isSel ? const Color(0xFF2563EB) : const Color(0xFF1E293B),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: isSel ? const Color(0xFF60A5FA) : const Color(0xFF334155)),
+                                ),
+                                child: Text(lbl, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                              ),
+                            );
+                          }),
+                          InkWell(
+                            onTap: () => setModalState(() => selectedSurgeDate = 'ALL'),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: selectedSurgeDate == 'ALL' ? const Color(0xFF9333EA) : const Color(0xFF1E293B),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: selectedSurgeDate == 'ALL' ? const Color(0xFFA855F7) : const Color(0xFF334155)),
+                              ),
+                              child: const Text('📁 All History', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 14),
-                    if (suggestions.isEmpty)
+
+                    if (displayedSuggestions.isEmpty)
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 40),
                         child: Center(
                           child: Text(
-                            'No active sudden surge signals right now.\nScanning every 5s...',
+                            'No active sudden surge signals for this date.\nScanning every 5s...',
                             textAlign: TextAlign.center,
                             style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
                           ),
                         ),
                       )
                     else
-                      ...suggestions.map((sugg) {
+                      ...displayedSuggestions.map((sugg) {
                         final isCall = sugg['option_type'] == 'CE';
                         final lotSize = (sugg['lot_size'] as num?)?.toInt() ?? 65;
                         final entry = (sugg['entry_price'] as num?)?.toDouble() ?? 50.0;
