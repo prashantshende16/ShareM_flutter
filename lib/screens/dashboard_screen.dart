@@ -655,7 +655,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         'symboltoken': exec?.symboltoken,
         'action': 'BUY',
         'option_type': isCall ? 'CE' : 'PE',
-        'strike_price': sig.selectedStrike.toDouble(),
+        'strike_price': sig.selectedStrike?.toDouble(),
         'expiry': sig.activeExpiry,
         'timeframe': _selectedTimeframe,
         'lots': 1,
