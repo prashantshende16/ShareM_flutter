@@ -132,6 +132,7 @@ class TradeExecution {
   final double dayClose;
   final double dayOpen;
   final String tradingsymbol;
+  final String symboltoken;
 
   TradeExecution({
     required this.contractName,
@@ -154,6 +155,7 @@ class TradeExecution {
     this.dayClose = 0.0,
     this.dayOpen = 0.0,
     this.tradingsymbol = '',
+    this.symboltoken = '',
   });
 
   factory TradeExecution.fromJson(Map<String, dynamic> json) {
@@ -178,6 +180,7 @@ class TradeExecution {
       dayClose: (json['day_close'] as num?)?.toDouble() ?? 0.0,
       dayOpen: (json['day_open'] as num?)?.toDouble() ?? 0.0,
       tradingsymbol: json['tradingsymbol']?.toString() ?? '',
+      symboltoken: json['symboltoken']?.toString() ?? '',
     );
   }
 }

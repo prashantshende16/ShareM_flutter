@@ -7,6 +7,8 @@ class OptionSignalCard extends StatelessWidget {
   final ValueChanged<String>? onExpiryChanged;
   final ValueChanged<int>? onStrikeChanged;
   final VoidCallback? onRefresh;
+  final VoidCallback? onAddTrade;
+  final bool isAddingTrade;
 
   const OptionSignalCard({
     super.key,
@@ -15,6 +17,8 @@ class OptionSignalCard extends StatelessWidget {
     this.onExpiryChanged,
     this.onStrikeChanged,
     this.onRefresh,
+    this.onAddTrade,
+    this.isAddingTrade = false,
   });
 
   @override
@@ -911,6 +915,29 @@ class OptionSignalCard extends StatelessWidget {
                   Text('Low: ₹${trade.dayLow.toStringAsFixed(1)}',
                       style: const TextStyle(color: Color(0xFFFB7185), fontSize: 10, fontWeight: FontWeight.bold)),
                 ],
+              ),
+            ),
+          ],
+
+          if (onAddTrade != null) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: isAddingTrade ? null : onAddTrade,
+                icon: isAddingTrade
+                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                    : const Icon(Icons.flash_on, size: 16),
+                label: Text(
+                  isAddingTrade ? 'Adding Position...' : '⚡ Add Trade (1 Lot = ${trade.totalQuantity} Qty)',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                ),
               ),
             ),
           ],

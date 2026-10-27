@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../models/analysis_models.dart';
 import '../models/market_models.dart';
 import '../models/option_signal_models.dart';
@@ -46,8 +47,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic>? _profileMarginData;
   List<dynamic> _trades = [];
   bool _isExecutingBatch = false;
+  bool _isAddingSingleTrade = false;
+  bool _isClosedTradesExpanded = true;
+  String _closedTradesDateFilter = 'TODAY';
+  String _activeTradesDateFilter = 'ALL';
   int? _actionLoadingTradeId;
   Timer? _liveTradeTimer;
+
+  String _formatDateTime(dynamic dt) {
+    if (dt == null) return '--';
+    try {
+      final d = DateTime.tryParse(dt.toString());
+      if (d == null) return dt.toString();
+      final local = d.toLocal();
+      return DateFormat('dd MMM, hh:mm a').format(local);
+    } catch (_) {
+      return dt.toString();
+    }
+  }
+
+  String _extractTradeDate(dynamic dt) {
+    if (dt == null) return 'Unknown';
+    try {
+      final d = DateTime.tryParse(dt.toString());
+      if (d == null) return dt.toString();
+      return DateFormat('yyyy-MM-dd').format(d.toLocal());
+    } catch (_) {
+      return 'Unknown';
+    }
+  }
 
   @override
   void initState() {
@@ -603,6 +631,121 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<void> _addSingleTrade(OptionIndicator5m sig) async {
+    setState(() {
+      _isAddingSingleTrade = true;
+    });
+
+    try {
+      final exec = sig.tradeExecution;
+      final isCall = sig.direction == 'CALL';
+      final lotSize = exec?.lotSize ?? (_selectedSymbol.contains('SENSEX') ? 20 : (_selectedSymbol.contains('BANK') ? 60 : 65));
+      final entryPrice = exec?.recommendedEntry ?? 50.0;
+      final entry = entryPrice > 0 ? entryPrice : 50.0;
+      final sl = exec?.stopLoss ?? (entry * 0.8);
+      final t1 = exec?.target1 ?? (entry * 1.3);
+      final t2 = exec?.target2 ?? (entry * 1.5);
+      final ltp = exec?.currentLtp ?? entry;
+
+      await _api.createTrade({
+        'symbol': _selectedSymbol,
+        'contract_name': exec?.contractName ?? '$_selectedSymbol ${sig.activeExpiry} ${sig.strikeSuggestion}',
+        'exchange': _selectedSymbol.contains('SENSEX') ? 'BFO' : 'NFO',
+        'tradingsymbol': exec?.tradingsymbol,
+        'symboltoken': exec?.symboltoken,
+        'action': 'BUY',
+        'option_type': isCall ? 'CE' : 'PE',
+        'strike_price': sig.selectedStrike.toDouble(),
+        'expiry': sig.activeExpiry,
+        'timeframe': _selectedTimeframe,
+        'lots': 1,
+        'lot_size': lotSize,
+        'entry_price': entry,
+        'current_ltp': ltp,
+        'stop_loss': sl,
+        'target_1': t1,
+        'target_2': t2,
+        'trade_mode': 'PAPER',
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF10B981),
+          content: Text('✅ Added 1 Lot ($lotSize Qty) $_selectedSymbol to Active Positions!'),
+        ),
+      );
+      _loadDashboardData();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFFF43F5E),
+            content: Text('Failed to add trade: $e'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isAddingSingleTrade = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _closeAllTrades() async {
+    final active = _trades.where((t) => t['status'] == 'ACTIVE' || t['status'] == 'TARGET_1_BOOKED').toList();
+    if (active.isEmpty) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: const Text('Exit All Active Positions?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Text(
+          'Are you sure you want to square off all ${active.length} active positions at current market prices?',
+          style: const TextStyle(color: Color(0xFF94A3B8)),
+        ),
+        actions: [
+          TextButton(
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF94A3B8))),
+            onPressed: () => Navigator.pop(ctx, false),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF43F5E)),
+            child: const Text('Exit All', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        final res = await _api.closeAllTrades();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: const Color(0xFF10B981),
+              content: Text(res['message']?.toString() ?? 'All positions closed!'),
+            ),
+          );
+        }
+        _loadDashboardData();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: const Color(0xFFF43F5E),
+              content: Text('Failed to exit all positions: $e'),
+            ),
+          );
+        }
+      }
+    }
+  }
+
   Future<void> _bookTarget1(int tradeId) async {
     setState(() {
       _actionLoadingTradeId = tradeId;
@@ -1105,6 +1248,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       onExpiryChanged: (type) => _refreshOptionSignal(type, _selectedStrike),
                       onStrikeChanged: (strike) => _refreshOptionSignal(_selectedExpiryType, strike),
                       onRefresh: () => _refreshAllOptionSignals(),
+                      onAddTrade: () => _addSingleTrade(_optionSignal!),
+                      isAddingTrade: _isAddingSingleTrade,
                     )
                   else if (_isLoading)
                     const Center(
@@ -1279,7 +1424,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final availMargin = (paper['available_balance'] as num?)?.toDouble() ?? 500000.0;
     final blockedMargin = (paper['margin_blocked'] as num?)?.toDouble() ?? 0.0;
     final unrealizedPnl = (paper['unrealized_pnl'] as num?)?.toDouble() ?? 0.0;
+    final realizedPnl = (paper['realized_pnl'] as num?)?.toDouble() ?? 0.0;
+    final openPositions = (paper['open_positions'] as num?)?.toInt() ?? 0;
     final isUnrealizedUp = unrealizedPnl >= 0;
+    final isRealizedUp = realizedPnl >= 0;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -1315,7 +1463,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                       ),
                       Text(
-                        '$clientCode • Angel One SmartAPI',
+                        '$clientCode • Angel One Paper Mode',
                         style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
                       ),
                     ],
@@ -1323,18 +1471,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: const Color(0xFF10B981).withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.check_circle, color: Color(0xFF10B981), size: 10),
-                    SizedBox(width: 4),
-                    Text('F&O Active', style: TextStyle(color: Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold)),
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF10B981),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      '$openPositions Active Positions',
+                      style: const TextStyle(color: Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
                   ],
                 ),
               ),
@@ -1345,7 +1503,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
                   decoration: BoxDecoration(
                     color: const Color(0xFF0F172A),
                     borderRadius: BorderRadius.circular(8),
@@ -1353,9 +1511,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Available Margin', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 9)),
+                      const Text('Available Capital', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 9)),
                       const SizedBox(height: 2),
-                      Text('₹${availMargin.toStringAsFixed(0)}', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                      Text('₹${availMargin.toStringAsFixed(0)}', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),
@@ -1363,7 +1521,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const SizedBox(width: 6),
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
                   decoration: BoxDecoration(
                     color: const Color(0xFF0F172A),
                     borderRadius: BorderRadius.circular(8),
@@ -1373,7 +1531,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     children: [
                       const Text('Margin Blocked', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 9)),
                       const SizedBox(height: 2),
-                      Text('₹${blockedMargin.toStringAsFixed(0)}', style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 12, fontWeight: FontWeight.bold)),
+                      Text('₹${blockedMargin.toStringAsFixed(0)}', style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 13, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: (isUnrealizedUp ? const Color(0xFF10B981) : const Color(0xFFF43F5E)).withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Live Unrealized P&L', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 9)),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${isUnrealizedUp ? "+" : ""}₹${unrealizedPnl.toStringAsFixed(1)}',
+                        style: TextStyle(
+                          color: isUnrealizedUp ? const Color(0xFF34D399) : const Color(0xFFF43F5E),
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1381,21 +1571,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const SizedBox(width: 6),
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
                   decoration: BoxDecoration(
                     color: const Color(0xFF0F172A),
                     borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: (isRealizedUp ? const Color(0xFF10B981) : const Color(0xFFF43F5E)).withValues(alpha: 0.3),
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Live P&L', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 9)),
+                      const Text('Realized Profit', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 9)),
                       const SizedBox(height: 2),
                       Text(
-                        '${isUnrealizedUp ? "+" : ""}₹${unrealizedPnl.toStringAsFixed(1)}',
+                        '${isRealizedUp ? "+" : ""}₹${realizedPnl.toStringAsFixed(1)}',
                         style: TextStyle(
-                          color: isUnrealizedUp ? const Color(0xFF34D399) : const Color(0xFFF43F5E),
-                          fontSize: 12,
+                          color: isRealizedUp ? const Color(0xFF34D399) : const Color(0xFFF43F5E),
+                          fontSize: 13,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -1482,7 +1675,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildActiveTradesList() {
     final active = _trades.where((t) => t['status'] == 'ACTIVE' || t['status'] == 'TARGET_1_BOOKED').toList();
-    if (active.isEmpty) return const SizedBox.shrink();
+    final closed = _trades.where((t) => t['status'] == 'CLOSED' || t['status'] == 'TARGET_2_BOOKED' || t['status'] == 'STOPPED_OUT').toList();
+
+    if (active.isEmpty && closed.isEmpty) return const SizedBox.shrink();
+
+    final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+    final todayActive = active.where((t) {
+      final d = _extractTradeDate(t['entry_time'] ?? t['created_at']);
+      return d == todayStr;
+    }).toList();
+
+    final displayedActive = _activeTradesDateFilter == 'TODAY' && todayActive.isNotEmpty
+        ? todayActive
+        : active;
+
+    final todayClosed = closed.where((t) {
+      final d = _extractTradeDate(t['exit_time'] ?? t['created_at']);
+      return d == todayStr;
+    }).toList();
+
+    final displayedClosed = _closedTradesDateFilter == 'TODAY'
+        ? todayClosed
+        : closed;
+
+    final totalRealized = closed.fold<double>(0.0, (acc, t) => acc + ((t['realized_pnl'] as num?)?.toDouble() ?? 0.0));
+    final activeTotalPnl = active.fold<double>(0.0, (acc, t) => acc + ((t['unrealized_pnl'] as num?)?.toDouble() ?? 0.0));
+    final isActivePnlUp = activeTotalPnl >= 0;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -1495,166 +1714,514 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 1. Active Header Row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
                 children: [
-                  const Icon(Icons.trending_up, color: Color(0xFF34D399), size: 16),
+                  const Icon(Icons.flash_on, color: Color(0xFF38BDF8), size: 16),
                   const SizedBox(width: 6),
                   Text(
-                    'Active F&O Positions (${active.length})',
+                    'Active Positions (${active.length})',
                     style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
-              TextButton(
-                onPressed: _clearAllTrades,
-                child: const Text('Clear All', style: TextStyle(color: Color(0xFFF43F5E), fontSize: 11, fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          ...active.map((t) {
-            final tradeId = t['id'] as int? ?? 0;
-            final isCall = (t['option_type']?.toString() ?? 'CE') == 'CE';
-            final isT1Booked = t['status'] == 'TARGET_1_BOOKED';
-            final pnl = (t['unrealized_pnl'] as num?)?.toDouble() ?? 0.0;
-            final isProfit = pnl >= 0;
-            final isLoadingAction = _actionLoadingTradeId == tradeId;
-
-            return Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: isT1Booked
-                      ? const Color(0xFF10B981).withValues(alpha: 0.6)
-                      : const Color(0xFF334155),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              Row(
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: (isCall ? const Color(0xFF10B981) : const Color(0xFFF43F5E)).withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              '${t['action'] ?? "BUY"} ${t['option_type'] ?? "CE"}',
-                              style: TextStyle(
-                                color: isCall ? const Color(0xFF34D399) : const Color(0xFFFB7185),
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            '${t['lots'] ?? 1} Lot (${t['quantity'] ?? 25} Qty)',
-                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
-                          ),
-                          if (isT1Booked) ...[
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF10B981).withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Text('T1 Booked', style: TextStyle(color: Color(0xFF10B981), fontSize: 8, fontWeight: FontWeight.bold)),
-                            ),
-                          ],
-                        ],
+                  if (active.isNotEmpty) ...[
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFF43F5E),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                       ),
-                      Text(
-                        '${isProfit ? "+" : ""}₹${pnl.toStringAsFixed(1)}',
-                        style: TextStyle(
-                          color: isProfit ? const Color(0xFF34D399) : const Color(0xFFF43F5E),
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    t['contract_name']?.toString() ?? '',
-                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Entry: ₹${t['entry_price']}', style: const TextStyle(color: Color(0xFF34D399), fontSize: 10, fontWeight: FontWeight.bold)),
-                      Text('SL: ₹${t['stop_loss']}', style: const TextStyle(color: Color(0xFFF43F5E), fontSize: 10, fontWeight: FontWeight.bold)),
-                      Text('T1: ₹${t['target_1']}', style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold)),
-                      Text('T2: ₹${t['target_2']}', style: const TextStyle(color: Color(0xFF818CF8), fontSize: 10, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      if (!isT1Booked)
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF10B981),
-                              foregroundColor: Colors.black,
-                              padding: const EdgeInsets.symmetric(vertical: 6),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                            ),
-                            onPressed: isLoadingAction ? null : () => _bookTarget1(tradeId),
-                            icon: const Icon(Icons.check_circle_outline, size: 12),
-                            label: const Text('Book T1', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                          ),
-                        )
-                      else
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF6366F1),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 6),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                            ),
-                            onPressed: isLoadingAction ? null : () => _bookTarget2(tradeId),
-                            icon: const Icon(Icons.emoji_events, size: 12),
-                            label: const Text('Book T2', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                          ),
-                        ),
-                      const SizedBox(width: 6),
-                      OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFFF43F5E),
-                          side: const BorderSide(color: Color(0xFFF43F5E)),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                        ),
-                        onPressed: isLoadingAction ? null : () => _closeTrade(tradeId),
-                        child: const Text('Exit', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                      ),
-                      const SizedBox(width: 4),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, size: 16, color: Color(0xFF64748B)),
-                        onPressed: isLoadingAction ? null : () => _deleteTrade(tradeId),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    ],
+                      onPressed: _closeAllTrades,
+                      icon: const Icon(Icons.close, size: 12),
+                      label: const Text('Exit All', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: _clearAllTrades,
+                    child: const Text('Clear', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
                   ),
                 ],
               ),
-            );
-          }),
+            ],
+          ),
+
+          if (active.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            // Filter chips for active trades
+            Row(
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _activeTradesDateFilter = 'TODAY';
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _activeTradesDateFilter == 'TODAY'
+                          ? const Color(0xFF0284C7).withValues(alpha: 0.3)
+                          : const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: _activeTradesDateFilter == 'TODAY'
+                            ? const Color(0xFF38BDF8)
+                            : const Color(0xFF334155),
+                      ),
+                    ),
+                    child: Text(
+                      'Today (${todayActive.length})',
+                      style: TextStyle(
+                        color: _activeTradesDateFilter == 'TODAY' ? Colors.white : const Color(0xFF94A3B8),
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _activeTradesDateFilter = 'ALL';
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _activeTradesDateFilter == 'ALL'
+                          ? const Color(0xFF0284C7).withValues(alpha: 0.3)
+                          : const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: _activeTradesDateFilter == 'ALL'
+                            ? const Color(0xFF38BDF8)
+                            : const Color(0xFF334155),
+                      ),
+                    ),
+                    child: Text(
+                      'All Active (${active.length})',
+                      style: TextStyle(
+                        color: _activeTradesDateFilter == 'ALL' ? Colors.white : const Color(0xFF94A3B8),
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '${isActivePnlUp ? "+" : ""}₹${activeTotalPnl.toStringAsFixed(1)}',
+                  style: TextStyle(
+                    color: isActivePnlUp ? const Color(0xFF34D399) : const Color(0xFFF43F5E),
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ],
+
+          const SizedBox(height: 8),
+
+          // Active trades list
+          if (active.isEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              alignment: Alignment.center,
+              child: const Text(
+                'No active positions. Add trades using ⚡ button below.',
+                style: TextStyle(color: Color(0xFF64748B), fontSize: 11),
+              ),
+            )
+          else
+            ...displayedActive.map((t) {
+              final tradeId = t['id'] as int? ?? 0;
+              final isCall = (t['option_type']?.toString() ?? 'CE') == 'CE';
+              final isT1Booked = t['status'] == 'TARGET_1_BOOKED';
+              final pnl = (t['unrealized_pnl'] as num?)?.toDouble() ?? 0.0;
+              final isProfit = pnl >= 0;
+              final isLoadingAction = _actionLoadingTradeId == tradeId;
+              final ltp = (t['current_ltp'] as num?)?.toDouble() ?? 0.0;
+              final entry = (t['entry_price'] as num?)?.toDouble() ?? 0.0;
+              final diffPct = entry > 0 ? ((ltp - entry) / entry * 100) : 0.0;
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: isT1Booked
+                        ? const Color(0xFF10B981).withValues(alpha: 0.6)
+                        : const Color(0xFF334155),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: (isCall ? const Color(0xFF10B981) : const Color(0xFFF43F5E)).withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                '${t['action'] ?? "BUY"} ${t['option_type'] ?? "CE"}',
+                                style: TextStyle(
+                                  color: isCall ? const Color(0xFF34D399) : const Color(0xFFFB7185),
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              '${t['lots'] ?? 1} Lot (${t['quantity'] ?? 25} Qty)',
+                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                            ),
+                            if (isT1Booked) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text('T1 Booked', style: TextStyle(color: Color(0xFF10B981), fontSize: 8, fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ],
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '${isProfit ? "+" : ""}₹${pnl.toStringAsFixed(1)}',
+                              style: TextStyle(
+                                color: isProfit ? const Color(0xFF34D399) : const Color(0xFFF43F5E),
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              '${diffPct >= 0 ? "+" : ""}${diffPct.toStringAsFixed(1)}% • LTP: ₹${ltp.toStringAsFixed(1)}',
+                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 9),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      t['contract_name']?.toString() ?? '',
+                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Entry: ₹${t['entry_price']}', style: const TextStyle(color: Color(0xFF34D399), fontSize: 10, fontWeight: FontWeight.bold)),
+                        Text('SL: ₹${t['stop_loss']}', style: const TextStyle(color: Color(0xFFF43F5E), fontSize: 10, fontWeight: FontWeight.bold)),
+                        Text('T1: ₹${t['target_1']}', style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold)),
+                        Text('T2: ₹${t['target_2']}', style: const TextStyle(color: Color(0xFF818CF8), fontSize: 10, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        if (!isT1Booked)
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF10B981),
+                                foregroundColor: Colors.black,
+                                padding: const EdgeInsets.symmetric(vertical: 6),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              ),
+                              onPressed: isLoadingAction ? null : () => _bookTarget1(tradeId),
+                              icon: const Icon(Icons.check_circle_outline, size: 12),
+                              label: const Text('Book T1', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                            ),
+                          )
+                        else
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF6366F1),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 6),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              ),
+                              onPressed: isLoadingAction ? null : () => _bookTarget2(tradeId),
+                              icon: const Icon(Icons.emoji_events, size: 12),
+                              label: const Text('Book T2', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                        const SizedBox(width: 6),
+                        OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFF43F5E),
+                            side: const BorderSide(color: Color(0xFFF43F5E)),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                          ),
+                          onPressed: isLoadingAction ? null : () => _closeTrade(tradeId),
+                          child: const Text('Exit', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                        ),
+                        const SizedBox(width: 4),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 16, color: Color(0xFF64748B)),
+                          onPressed: isLoadingAction ? null : () => _deleteTrade(tradeId),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }),
+
+          // 2. Closed / Realized Trades Section
+          if (closed.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F172A).withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF334155)),
+              ),
+              child: Column(
+                children: [
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        _isClosedTradesExpanded = !_isClosedTradesExpanded;
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.history, color: Color(0xFF94A3B8), size: 15),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Closed Trades (${closed.length})',
+                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: (totalRealized >= 0 ? const Color(0xFF10B981) : const Color(0xFFF43F5E)).withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  'Realized: ${totalRealized >= 0 ? "+" : ""}₹${totalRealized.toStringAsFixed(1)}',
+                                  style: TextStyle(
+                                    color: totalRealized >= 0 ? const Color(0xFF34D399) : const Color(0xFFF43F5E),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Icon(
+                                _isClosedTradesExpanded ? Icons.expand_less : Icons.expand_more,
+                                color: const Color(0xFF94A3B8),
+                                size: 18,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  if (_isClosedTradesExpanded) ...[
+                    const Divider(height: 1, color: Color(0xFF334155)),
+                    Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Closed Trades Filter Chips
+                          Row(
+                            children: [
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _closedTradesDateFilter = 'TODAY';
+                                  });
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: _closedTradesDateFilter == 'TODAY'
+                                        ? const Color(0xFF0284C7).withValues(alpha: 0.3)
+                                        : const Color(0xFF1E293B),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: _closedTradesDateFilter == 'TODAY'
+                                          ? const Color(0xFF38BDF8)
+                                          : const Color(0xFF334155),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    'Today (${todayClosed.length})',
+                                    style: TextStyle(
+                                      color: _closedTradesDateFilter == 'TODAY' ? Colors.white : const Color(0xFF94A3B8),
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _closedTradesDateFilter = 'ALL';
+                                  });
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: _closedTradesDateFilter == 'ALL'
+                                        ? const Color(0xFF0284C7).withValues(alpha: 0.3)
+                                        : const Color(0xFF1E293B),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: _closedTradesDateFilter == 'ALL'
+                                          ? const Color(0xFF38BDF8)
+                                          : const Color(0xFF334155),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    'All History (${closed.length})',
+                                    style: TextStyle(
+                                      color: _closedTradesDateFilter == 'ALL' ? Colors.white : const Color(0xFF94A3B8),
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+
+                          if (displayedClosed.isEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              alignment: Alignment.center,
+                              child: Text(
+                                _closedTradesDateFilter == 'TODAY'
+                                    ? 'No trades closed today. Tap "All History" to see past trades.'
+                                    : 'No closed trades recorded.',
+                                style: const TextStyle(color: Color(0xFF64748B), fontSize: 10),
+                              ),
+                            )
+                          else
+                            ...displayedClosed.map((t) {
+                              final tradeId = t['id'] as int? ?? 0;
+                              final realized = (t['realized_pnl'] as num?)?.toDouble() ?? 0.0;
+                              final isRealizedUp = realized >= 0;
+                              final entry = (t['entry_price'] as num?)?.toDouble() ?? 0.0;
+                              final exit = (t['current_ltp'] as num?)?.toDouble() ?? 0.0;
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 6),
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1E293B),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: const Color(0xFF334155)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            t['contract_name']?.toString() ?? '',
+                                            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        Text(
+                                          '${isRealizedUp ? "+" : ""}₹${realized.toStringAsFixed(1)}',
+                                          style: TextStyle(
+                                            color: isRealizedUp ? const Color(0xFF34D399) : const Color(0xFFF43F5E),
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete_outline, size: 14, color: Color(0xFF64748B)),
+                                          onPressed: () => _deleteTrade(tradeId),
+                                          visualDensity: VisualDensity.compact,
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          'Entry: ₹$entry → Exit: ₹$exit',
+                                          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 9, fontFamily: 'monospace'),
+                                        ),
+                                        Text(
+                                          _formatDateTime(t['exit_time'] ?? t['created_at']),
+                                          style: const TextStyle(color: Color(0xFF64748B), fontSize: 9),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

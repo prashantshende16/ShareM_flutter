@@ -438,6 +438,24 @@ class ApiService {
     throw Exception(err['detail'] ?? 'Failed to book Target 2');
   }
 
+  Future<Map<String, dynamic>> createTrade(Map<String, dynamic> payload) async {
+    final response = await _safePost('/trades', body: payload);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    final err = jsonDecode(response.body);
+    throw Exception(err['detail'] ?? 'Failed to create trade');
+  }
+
+  Future<Map<String, dynamic>> closeAllTrades() async {
+    final response = await _safePost('/trades/close-all');
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    final err = jsonDecode(response.body);
+    throw Exception(err['detail'] ?? 'Failed to close all trades');
+  }
+
   Future<Map<String, dynamic>> closeTrade(int tradeId) async {
     final response = await _safePost('/trades/$tradeId/close');
     if (response.statusCode == 200) {
