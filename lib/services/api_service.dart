@@ -480,4 +480,12 @@ class ApiService {
     }
     throw Exception('Failed to clear trades: ${response.statusCode}');
   }
+
+  Future<Map<String, dynamic>> getSurgeRadar({bool force = false}) async {
+    final response = await _safeGet('/market/surge-radar?force=$force');
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to fetch surge radar: ${response.statusCode}');
+  }
 }

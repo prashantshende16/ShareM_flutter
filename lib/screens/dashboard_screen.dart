@@ -43,6 +43,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _lastValidUntil = '';
   bool _isRefreshingAll = false;
   Map<String, dynamic>? _globalRadarData;
+  Map<String, dynamic>? _surgeData;
   bool _isRunningAIAgent = false;
   Map<String, dynamic>? _profileMarginData;
   List<dynamic> _trades = [];
@@ -98,15 +99,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final results = await Future.wait([
         _api.getProfileMargin().catchError((e) => <String, dynamic>{}),
         _api.getTrades().catchError((e) => <dynamic>[]),
+        _api.getSurgeRadar().catchError((e) => <String, dynamic>{}),
       ]);
       if (!mounted) return;
       final pm = results[0] as Map<String, dynamic>?;
       final tr = results[1] as List<dynamic>?;
+      final sr = results[2] as Map<String, dynamic>?;
       if (pm != null && pm.isNotEmpty) {
         _profileMarginData = pm;
       }
       if (tr != null) {
         _trades = tr;
+      }
+      if (sr != null && sr.isNotEmpty) {
+        _surgeData = sr;
       }
       if (mounted) setState(() {});
     } catch (_) {}
@@ -144,6 +150,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _api.getGlobalRadar().catchError((e) => <String, dynamic>{}),
         _api.getProfileMargin().catchError((e) => <String, dynamic>{}),
         _api.getTrades().catchError((e) => <dynamic>[]),
+        _api.getSurgeRadar().catchError((e) => <String, dynamic>{}),
       ]);
 
       if (mounted) {
@@ -190,6 +197,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           final trRes = results[7] as List<dynamic>?;
           if (trRes != null) {
             _trades = trRes;
+          }
+          final srRes = results[8] as Map<String, dynamic>?;
+          if (srRes != null && srRes.isNotEmpty) {
+            _surgeData = srRes;
           }
           _isLoading = false;
         });
@@ -927,6 +938,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
         actions: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_active_outlined, color: Color(0xFFFBBF24)),
+                onPressed: _showSurgeRadarSheet,
+                tooltip: 'Rapid Surge Radar (10%-20%+ Moves)',
+              ),
+              if ((_surgeData?['suggestions'] as List<dynamic>?)?.isNotEmpty == true)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFF43F5E),
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                    child: Text(
+                      '${(_surgeData!['suggestions'] as List).length}',
+                      style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: MarketStatusBadge(
@@ -977,6 +1016,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 children: [
                   // Global Radar & Macro Banner
                   if (_globalRadarData != null) _buildGlobalRadarBanner(),
+
+                  // Rapid Surge Radar Banner (10% - 20%+ Moves)
+                  if (_surgeData != null) _buildSurgeRadarBanner(),
 
                   // Profile & Margin Card
                   if (_profileMarginData != null) _buildProfileMarginCard(),
@@ -2224,6 +2266,401 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildSurgeRadarBanner() {
+    if (_surgeData == null) return const SizedBox.shrink();
+    final suggestions = (_surgeData!['suggestions'] as List<dynamic>?) ?? [];
+    if (suggestions.isEmpty) return const SizedBox.shrink();
+
+    final topSugg = suggestions.first;
+    final isCall = topSugg['option_type'] == 'CE';
+    final surgePct = (topSugg['surge_pct'] as num?)?.toDouble() ?? 10.0;
+    final delta = (topSugg['delta'] as num?)?.toDouble() ?? 0.50;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF78350F).withValues(alpha: 0.4),
+            const Color(0xFF1E293B),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Icon(Icons.flash_on, color: Color(0xFFFBBF24), size: 16),
+                  ),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'RAPID SURGE RADAR',
+                    style: TextStyle(color: Color(0xFFFBBF24), fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF43F5E).withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      '${suggestions.length} Signals',
+                      style: const TextStyle(color: Color(0xFFFB7185), fontSize: 9, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+              InkWell(
+                onTap: _showSurgeRadarSheet,
+                child: const Text('View All', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: (isCall ? const Color(0xFF10B981) : const Color(0xFFF43F5E)).withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            'BUY ${topSugg['option_type']}',
+                            style: TextStyle(
+                              color: isCall ? const Color(0xFF34D399) : const Color(0xFFFB7185),
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          topSugg['symbol']?.toString() ?? '',
+                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      topSugg['contract_name']?.toString() ?? '',
+                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '+${surgePct.toStringAsFixed(1)}% Surge',
+                    style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    'Δ $delta • Entry ₹${topSugg['entry_price']}',
+                    style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 9, fontFamily: 'monospace'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSurgeRadarSheet() {
+    final macro = _surgeData?['macro_radar'] as Map<String, dynamic>?;
+    final suggestions = (_surgeData?['suggestions'] as List<dynamic>?) ?? [];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF0F172A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (modalCtx, setModalState) {
+            return DraggableScrollableSheet(
+              initialChildSize: 0.85,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              expand: false,
+              builder: (_, scrollCtrl) {
+                return ListView(
+                  controller: scrollCtrl,
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF475569),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.flash_on, color: Color(0xFFFBBF24), size: 20),
+                            ),
+                            const SizedBox(width: 8),
+                            const Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'RAPID SURGE TRADE RADAR',
+                                  style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                ),
+                                Text(
+                                  '10% - 20%+ Sudden High Move Signals',
+                                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Color(0xFF94A3B8)),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    if (macro != null)
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E293B),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFF334155)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(Icons.public, color: Color(0xFF38BDF8), size: 14),
+                                SizedBox(width: 5),
+                                Text(
+                                  'GLOBAL MACRO & VOLATILITY (VIX)',
+                                  style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('Nasdaq: ${(macro['nasdaq']?['change_pct'] as num?)?.toDouble() ?? 0}%',
+                                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                Text('Dow: ${(macro['dow_jones']?['change_pct'] as num?)?.toDouble() ?? 0}%',
+                                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                Text('India VIX: ${(macro['india_vix']?['price'] as num?)?.toDouble() ?? 0}',
+                                    style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 11, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(height: 14),
+                    if (suggestions.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 40),
+                        child: Center(
+                          child: Text(
+                            'No active sudden surge signals right now.\nScanning every 5s...',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                          ),
+                        ),
+                      )
+                    else
+                      ...suggestions.map((sugg) {
+                        final isCall = sugg['option_type'] == 'CE';
+                        final lotSize = (sugg['lot_size'] as num?)?.toInt() ?? 65;
+                        final entry = (sugg['entry_price'] as num?)?.toDouble() ?? 50.0;
+                        final sl = (sugg['stop_loss'] as num?)?.toDouble() ?? 40.0;
+                        final t1 = (sugg['target_1'] as num?)?.toDouble() ?? 65.0;
+                        final t2 = (sugg['target_2'] as num?)?.toDouble() ?? 75.0;
+                        final delta = (sugg['delta'] as num?)?.toDouble() ?? 0.50;
+                        final surgePct = (sugg['surge_pct'] as num?)?.toDouble() ?? 10.0;
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E293B),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: sugg['is_hot'] == true
+                                  ? const Color(0xFFF59E0B).withValues(alpha: 0.6)
+                                  : const Color(0xFF334155),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: (isCall ? const Color(0xFF10B981) : const Color(0xFFF43F5E)).withValues(alpha: 0.2),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          'BUY ${sugg['option_type']}',
+                                          style: TextStyle(
+                                            color: isCall ? const Color(0xFF34D399) : const Color(0xFFFB7185),
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        sugg['symbol']?.toString() ?? '',
+                                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.4)),
+                                    ),
+                                    child: Text(
+                                      '+${surgePct.toStringAsFixed(1)}% Surge',
+                                      style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 10, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                sugg['contract_name']?.toString() ?? '',
+                                style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 11),
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text('Entry: ₹$entry', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                  Text('SL: ₹$sl', style: const TextStyle(color: Color(0xFFF43F5E), fontSize: 10, fontWeight: FontWeight.bold)),
+                                  Text('T1: ₹$t1', style: const TextStyle(color: Color(0xFF34D399), fontSize: 10, fontWeight: FontWeight.bold)),
+                                  Text('Delta: Δ $delta', style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: isCall ? const Color(0xFF10B981) : const Color(0xFFF43F5E),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  onPressed: () async {
+                                    Navigator.pop(ctx);
+                                    try {
+                                      await _api.createTrade({
+                                        'symbol': sugg['symbol'],
+                                        'contract_name': sugg['contract_name'],
+                                        'exchange': sugg['symbol'].toString().contains('SENSEX') ? 'BFO' : 'NFO',
+                                        'tradingsymbol': sugg['tradingsymbol'],
+                                        'symboltoken': sugg['symboltoken'],
+                                        'action': 'BUY',
+                                        'option_type': sugg['option_type'],
+                                        'strike_price': (sugg['strike_price'] as num?)?.toDouble(),
+                                        'expiry': sugg['expiry'],
+                                        'timeframe': '5m',
+                                        'lots': 1,
+                                        'lot_size': lotSize,
+                                        'entry_price': entry,
+                                        'current_ltp': sugg['current_ltp'] ?? entry,
+                                        'stop_loss': sl,
+                                        'target_1': t1,
+                                        'target_2': t2,
+                                        'trade_mode': 'PAPER',
+                                      });
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            backgroundColor: const Color(0xFF10B981),
+                                            content: Text('⚡ Added ${sugg['contract_name']} to Active Positions!'),
+                                          ),
+                                        );
+                                        _loadDashboardData();
+                                      }
+                                    } catch (e) {
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(content: Text('Failed to add trade: $e')),
+                                        );
+                                      }
+                                    }
+                                  },
+                                  icon: const Icon(Icons.flash_on, size: 14),
+                                  label: Text('⚡ Add 1 Lot ($lotSize Qty)', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 
