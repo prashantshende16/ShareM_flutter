@@ -946,7 +946,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 onPressed: _showSurgeRadarSheet,
                 tooltip: 'Rapid Surge Radar (10%-20%+ Moves)',
               ),
-              if ((_surgeData?['suggestions'] as List<dynamic>?)?.isNotEmpty == true)
+              if (_highConvictionSurges().isNotEmpty)
                 Positioned(
                   top: 8,
                   right: 8,
@@ -958,7 +958,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
                     child: Text(
-                      '${(_surgeData!['suggestions'] as List).length}',
+                      '${_highConvictionSurges().length}',
                       style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
                       textAlign: TextAlign.center,
                     ),
@@ -2271,7 +2271,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildSurgeRadarBanner() {
     if (_surgeData == null) return const SizedBox.shrink();
-    final suggestions = (_surgeData!['suggestions'] as List<dynamic>?) ?? [];
+    final suggestions = _highConvictionSurges();
     if (suggestions.isEmpty) return const SizedBox.shrink();
 
     final topSugg = suggestions.first;
@@ -2395,9 +2395,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  /// Only surge setups with profit chance / confidence >= 80%.
+  List<dynamic> _highConvictionSurges() {
+    final all = (_surgeData?['suggestions'] as List<dynamic>?) ?? [];
+    return all
+        .where((s) => ((s is Map ? s['confidence_score'] : null) as num? ?? 0) >= 80)
+        .toList();
+  }
+
   void _showSurgeRadarSheet() {
     final macro = _surgeData?['macro_radar'] as Map<String, dynamic>?;
-    final allSuggestions = (_surgeData?['suggestions'] as List<dynamic>?) ?? [];
+    final allSuggestions = _highConvictionSurges();
     final availableDates = (_surgeData?['available_dates'] as List<dynamic>?) ?? [];
     String selectedSurgeDate = 'TODAY';
 
