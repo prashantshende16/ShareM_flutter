@@ -2395,17 +2395,87 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  /// Only surge setups with profit chance / confidence >= 80%.
+  /// Only surge setups with confidence >= 80% and surge >= +500%.
   List<dynamic> _highConvictionSurges() {
     final all = (_surgeData?['suggestions'] as List<dynamic>?) ?? [];
+    final minConf = (_surgeData?['min_confidence'] as num?) ?? 80;
+    final minSurge = (_surgeData?['min_surge_pct'] as num?) ?? 10;
     return all
-        .where((s) => ((s is Map ? s['confidence_score'] : null) as num? ?? 0) >= 80)
+        .where((s) =>
+            ((s is Map ? s['confidence_score'] : null) as num? ?? 0) >= minConf &&
+            ((s is Map ? s['surge_pct'] : null) as num? ?? 0) >= minSurge)
         .toList();
+  }
+
+  Future<void> _showSurgeMinDialog() async {
+    final current = (_surgeData?['min_surge_pct'] as num?) ?? 10;
+    final controller = TextEditingController(text: current.toString());
+    final value = await showDialog<double>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: const Text('Minimum Momentum %', style: TextStyle(color: Colors.white, fontSize: 16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Show only surges above this value. Applies to new signals from now on.',
+              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 6,
+              children: [10, 50, 250, 500, 800]
+                  .map((v) => ActionChip(
+                        label: Text('$v%+'),
+                        onPressed: () => Navigator.pop(dCtx, v.toDouble()),
+                      ))
+                  .toList(),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: controller,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Custom %',
+                labelStyle: TextStyle(color: Color(0xFF94A3B8)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              final v = double.tryParse(controller.text.trim());
+              if (v != null && v >= 0) Navigator.pop(dCtx, v);
+            },
+            child: const Text('Apply'),
+          ),
+        ],
+      ),
+    );
+    if (value == null) return;
+    try {
+      await _api.setSurgeMinPct(value);
+      final sr = await _api.getSurgeRadar(force: true);
+      if (mounted) setState(() => _surgeData = sr);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Showing only +${value.toStringAsFixed(0)}% momentum and above')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not save setting: $e')));
+      }
+    }
   }
 
   void _showSurgeRadarSheet() {
     final macro = _surgeData?['macro_radar'] as Map<String, dynamic>?;
-    final allSuggestions = _highConvictionSurges();
     final availableDates = (_surgeData?['available_dates'] as List<dynamic>?) ?? [];
     String selectedSurgeDate = 'TODAY';
 
@@ -2420,7 +2490,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return StatefulBuilder(
           builder: (modalCtx, setModalState) {
             final todayDateStr = _surgeData?['today_date']?.toString() ?? '';
-            final displayedSuggestions = allSuggestions.where((s) {
+            final displayedSuggestions = _highConvictionSurges().where((s) {
               if (selectedSurgeDate == 'ALL') return true;
               final d = s['detected_date']?.toString() ?? '';
               if (selectedSurgeDate == 'TODAY') return d == todayDateStr || d.isEmpty;
@@ -2445,6 +2515,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         decoration: BoxDecoration(
                           color: const Color(0xFF475569),
                           borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: () async {
+                          await _showSurgeMinDialog();
+                          setModalState(() {});
+                        },
+                        icon: const Icon(Icons.tune, size: 16, color: Color(0xFFFBBF24)),
+                        label: Text(
+                          'Min momentum: +${(_surgeData?['min_surge_pct'] as num?) ?? 10}%',
+                          style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 12),
                         ),
                       ),
                     ),
@@ -2667,6 +2751,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   Text('T1: ₹$t1', style: const TextStyle(color: Color(0xFF34D399), fontSize: 10, fontWeight: FontWeight.bold)),
                                   Text('Delta: Δ $delta', style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold)),
                                 ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Signal ₹${sugg['signal_ltp'] ?? sugg['current_ltp'] ?? entry} • Live ₹${sugg['current_ltp'] ?? entry} • Buy at ₹$entry',
+                                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '1 Lot = ₹$entry × $lotSize = ₹${(entry * lotSize).round()}  |  Max risk -₹${((entry - sl) * lotSize).round()}  |  T1 +₹${((t1 - entry) * lotSize).round()}',
+                                style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 10, fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 10),
                               SizedBox(

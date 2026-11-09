@@ -488,4 +488,16 @@ class ApiService {
     }
     throw Exception('Failed to fetch surge radar: ${response.statusCode}');
   }
+
+  /// Set the minimum surge % (e.g. 250 or 800) for the Rapid Surge Trade Radar.
+  Future<Map<String, dynamic>> setSurgeMinPct(double minSurgePct) async {
+    final response = await _safePost(
+      '/market/surge-radar/settings',
+      body: {'min_surge_pct': minSurgePct},
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to save surge setting: ${response.statusCode}');
+  }
 }
