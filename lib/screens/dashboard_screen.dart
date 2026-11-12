@@ -67,6 +67,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  String _formatDuration(dynamic start, dynamic end) {
+    if (start == null || end == null) return '--';
+    try {
+      final s = DateTime.tryParse(start.toString());
+      final e = DateTime.tryParse(end.toString());
+      if (s == null || e == null) return '--';
+      final diff = e.difference(s);
+      final m = diff.inMinutes;
+      final sec = diff.inSeconds % 60;
+      if (m > 0) return '${m}m ${sec}s';
+      return '${sec}s';
+    } catch (_) {
+      return '--';
+    }
+  }
+
   String _extractTradeDate(dynamic dt) {
     if (dt == null) return 'Unknown';
     try {
@@ -864,6 +880,275 @@ class _DashboardScreenState extends State<DashboardScreen> {
         );
       }
     }
+  }
+
+  void _showClosedTradeDetailsSheet(Map<String, dynamic> t) {
+    final tradeId = t['id'] as int? ?? 0;
+    final contractName = t['contract_name']?.toString() ?? 'Trade Details';
+    final status = (t['status']?.toString() ?? 'CLOSED').replaceAll('_', ' ');
+    final realized = (t['realized_pnl'] as num?)?.toDouble() ?? 0.0;
+    final isRealizedUp = realized >= 0;
+    final entryPrice = (t['entry_price'] as num?)?.toDouble() ?? 0.0;
+    final exitPrice = (t['current_ltp'] as num?)?.toDouble() ?? 0.0;
+    final qty = (t['quantity'] as num?)?.toInt() ?? 1;
+    final lots = (t['lots'] as num?)?.toInt() ?? 1;
+    final purchaseAmount = entryPrice * qty;
+    final exitAmount = exitPrice * qty;
+    final pointDiff = exitPrice - entryPrice;
+    final pctReturn = entryPrice > 0 ? (pointDiff / entryPrice) * 100 : 0.0;
+    final sl = (t['stop_loss'] as num?)?.toDouble() ?? 0.0;
+    final t1 = (t['target_1'] as num?)?.toDouble() ?? 0.0;
+    final t2 = (t['target_2'] as num?)?.toDouble() ?? 0.0;
+    final addedTime = _formatDateTime(t['entry_time'] ?? t['created_at']);
+    final exitedTime = _formatDateTime(t['exit_time'] ?? t['created_at']);
+    final duration = _formatDuration(t['entry_time'] ?? t['created_at'], t['exit_time'] ?? t['created_at']);
+    final notes = t['notes']?.toString();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF0F172A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.85,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (_, scrollCtrl) {
+            return ListView(
+              controller: scrollCtrl,
+              padding: const EdgeInsets.all(16),
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF475569),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Text(
+                  contractName,
+                  style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: (isRealizedUp ? const Color(0xFF10B981) : const Color(0xFFF43F5E)).withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: (isRealizedUp ? const Color(0xFF10B981) : const Color(0xFFF43F5E)).withValues(alpha: 0.4)),
+                      ),
+                      child: Text(
+                        status,
+                        style: TextStyle(
+                          color: isRealizedUp ? const Color(0xFF34D399) : const Color(0xFFF43F5E),
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '$lots Lot ($qty Qty)',
+                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontFamily: 'monospace'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                // Realized P&L Hero Card
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: (isRealizedUp ? const Color(0xFF064E3B) : const Color(0xFF881337)).withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: (isRealizedUp ? const Color(0xFF10B981) : const Color(0xFFF43F5E)).withValues(alpha: 0.5)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Total Realized P&L', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
+                          Text(
+                            '${isRealizedUp ? "+" : ""}₹${realized.toStringAsFixed(1)}',
+                            style: TextStyle(
+                              color: isRealizedUp ? const Color(0xFF34D399) : const Color(0xFFF43F5E),
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                          Text(
+                            '${pointDiff >= 0 ? "+" : ""}${pointDiff.toStringAsFixed(2)} pts (${pctReturn >= 0 ? "+" : ""}${pctReturn.toStringAsFixed(1)}%)',
+                            style: TextStyle(color: isRealizedUp ? const Color(0xFF6EE7B7) : const Color(0xFFFDA4AF), fontSize: 10),
+                          ),
+                        ],
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          const Text('Holding Duration', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
+                          Text(duration, style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // Capital Amounts Grid
+                const Text('CAPITAL & AMOUNT BREAKDOWN', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(8)),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Purchase Lot Amount', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 9)),
+                            Text('₹${purchaseAmount.toStringAsFixed(1)}', style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 13, fontWeight: FontWeight.bold)),
+                            Text('₹${entryPrice.toStringAsFixed(1)} × $qty Qty', style: const TextStyle(color: Color(0xFF64748B), fontSize: 9)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(8)),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Closing / Exit Amount', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 9)),
+                            Text('₹${exitAmount.toStringAsFixed(1)}', style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 13, fontWeight: FontWeight.bold)),
+                            Text('₹${exitPrice.toStringAsFixed(1)} × $qty Qty', style: const TextStyle(color: Color(0xFF64748B), fontSize: 9)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                // Price Points & Levels
+                const Text('PRICE POINTS & LEVELS', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(8)),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Point Purchase (Entry):', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                          Text('₹$entryPrice', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Point Closing (Exit):', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                          Text('₹$exitPrice', style: TextStyle(color: isRealizedUp ? const Color(0xFF34D399) : const Color(0xFFF43F5E), fontSize: 11, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Stop Loss:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                          Text('₹$sl', style: const TextStyle(color: Color(0xFFF43F5E), fontSize: 11)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Target 1 / Target 2:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                          Text('₹$t1 / ₹$t2', style: const TextStyle(color: Color(0xFF34D399), fontSize: 11)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // Timestamps
+                const Text('TIMESTAMPS & STATEMENT', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(8)),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Point Purchase Time:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                          Text(addedTime, style: const TextStyle(color: Color(0xFF34D399), fontSize: 11)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Point Closing Time:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                          Text(exitedTime, style: const TextStyle(color: Color(0xFFF43F5E), fontSize: 11)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                if (notes != null && notes.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(8)),
+                    child: Text(notes, style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 10)),
+                  ),
+                ],
+                const SizedBox(height: 16),
+
+                // Delete Button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF881337),
+                      foregroundColor: const Color(0xFFFDA4AF),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: const Text('Delete Trade Record'),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _deleteTrade(tradeId);
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _clearAllTrades() async {
@@ -2200,59 +2485,64 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               final entry = (t['entry_price'] as num?)?.toDouble() ?? 0.0;
                               final exit = (t['current_ltp'] as num?)?.toDouble() ?? 0.0;
 
-                              return Container(
-                                margin: const EdgeInsets.only(bottom: 6),
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF1E293B),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: const Color(0xFF334155)),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            t['contract_name']?.toString() ?? '',
-                                            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                                            overflow: TextOverflow.ellipsis,
+                              return InkWell(
+                                onTap: () => _showClosedTradeDetailsSheet(t),
+                                borderRadius: BorderRadius.circular(6),
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 6),
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF1E293B),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: const Color(0xFF334155)),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              t['contract_name']?.toString() ?? '',
+                                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
                                           ),
-                                        ),
-                                        Text(
-                                          '${isRealizedUp ? "+" : ""}₹${realized.toStringAsFixed(1)}',
-                                          style: TextStyle(
-                                            color: isRealizedUp ? const Color(0xFF34D399) : const Color(0xFFF43F5E),
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
+                                          Text(
+                                            '${isRealizedUp ? "+" : ""}₹${realized.toStringAsFixed(1)}',
+                                            style: TextStyle(
+                                              color: isRealizedUp ? const Color(0xFF34D399) : const Color(0xFFF43F5E),
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
                                           ),
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(Icons.delete_outline, size: 14, color: Color(0xFF64748B)),
-                                          onPressed: () => _deleteTrade(tradeId),
-                                          visualDensity: VisualDensity.compact,
-                                          padding: EdgeInsets.zero,
-                                          constraints: const BoxConstraints(),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 3),
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          'Entry: ₹$entry → Exit: ₹$exit',
-                                          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 9, fontFamily: 'monospace'),
-                                        ),
-                                        Text(
-                                          _formatDateTime(t['exit_time'] ?? t['created_at']),
-                                          style: const TextStyle(color: Color(0xFF64748B), fontSize: 9),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
+                                          IconButton(
+                                            icon: const Icon(Icons.delete_outline, size: 16, color: Color(0xFFFDA4AF)),
+                                            onPressed: () => _deleteTrade(tradeId),
+                                            visualDensity: VisualDensity.compact,
+                                            padding: const EdgeInsets.only(left: 6),
+                                            constraints: const BoxConstraints(),
+                                            tooltip: 'Delete trade record',
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            'Entry: ₹$entry → Exit: ₹$exit',
+                                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 9, fontFamily: 'monospace'),
+                                          ),
+                                          Text(
+                                            _formatDateTime(t['exit_time'] ?? t['created_at']),
+                                            style: const TextStyle(color: Color(0xFF64748B), fontSize: 9),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               );
                             }),
