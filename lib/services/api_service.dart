@@ -447,6 +447,48 @@ class ApiService {
     throw Exception(err['detail'] ?? 'Failed to create trade');
   }
 
+  // 12. Manual Option Search & Quote
+  Future<List<Map<String, dynamic>>> searchOptionContracts(String query, {String? optionType}) async {
+    final params = <String, String>{'query': query};
+    if (optionType != null && optionType != 'ALL') {
+      params['option_type'] = optionType;
+    }
+    final response = await _safeGet('/trades/search-options', queryParams: params);
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      final list = data['contracts'] as List? ?? [];
+      return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    }
+    throw Exception('Failed to search options: ${response.statusCode}');
+  }
+
+  Future<Map<String, dynamic>> getContractQuote({
+    required String symbol,
+    required int strike,
+    required String optionType,
+    String? expiry,
+    String? tradingsymbol,
+    String? symboltoken,
+    String? exchange,
+  }) async {
+    final params = <String, String>{
+      'symbol': symbol,
+      'strike': strike.toString(),
+      'option_type': optionType,
+    };
+    if (expiry != null) params['expiry'] = expiry;
+    if (tradingsymbol != null) params['tradingsymbol'] = tradingsymbol;
+    if (symboltoken != null) params['symboltoken'] = symboltoken;
+    if (exchange != null) params['exchange'] = exchange;
+
+    final response = await _safeGet('/trades/contract-quote', queryParams: params);
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return Map<String, dynamic>.from(data['data'] as Map);
+    }
+    throw Exception('Failed to load contract quote');
+  }
+
   Future<Map<String, dynamic>> closeAllTrades() async {
     final response = await _safePost('/trades/close-all');
     if (response.statusCode == 200) {

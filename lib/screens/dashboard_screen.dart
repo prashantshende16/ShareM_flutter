@@ -11,6 +11,7 @@ import '../widgets/option_signal_card.dart';
 import '../widgets/status_badge.dart';
 import 'analysis_detail_screen.dart';
 import 'new_analysis_screen.dart';
+import 'manual_trade_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback? onNavigateToNew;
@@ -1223,6 +1224,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.search, color: Color(0xFF38BDF8)),
+            tooltip: 'Search & Trade Strike (e.g. 56000, 76000)',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (ctx) => const ManualTradeScreen(),
+                ),
+              );
+            },
+          ),
           Stack(
             alignment: Alignment.center,
             children: [
@@ -1738,6 +1750,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
           ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (ctx) => const ManualTradeScreen(),
+            ),
+          );
+        },
+        backgroundColor: const Color(0xFF2563EB),
+        icon: const Icon(Icons.flash_on, color: Colors.white),
+        label: const Text(
+          'Trade Strike',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
     );
