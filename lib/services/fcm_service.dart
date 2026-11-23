@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -51,7 +50,7 @@ class FCMService {
       const InitializationSettings initSettings = InitializationSettings(android: androidInit);
 
       await _localNotifications.initialize(
-        initSettings,
+        settings: initSettings,
         onDidReceiveNotificationResponse: (NotificationResponse response) {
           debugPrint("Notification tapped: ${response.payload}");
         },
@@ -149,10 +148,10 @@ class FCMService {
     const NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
 
     await _localNotifications.show(
-      id,
-      title,
-      body,
-      platformDetails,
+      id: id,
+      title: title,
+      body: body,
+      notificationDetails: platformDetails,
       payload: payload,
     );
   }
