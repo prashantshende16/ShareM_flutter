@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'config/api_config.dart';
+import 'services/fcm_service.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/new_analysis_screen.dart';
@@ -9,6 +10,8 @@ import 'screens/splash_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ApiConfig.init();
+  // Initialize Firebase Cloud Messaging & Local Push Notifications
+  await FCMService().initialize();
   runApp(const ShareMApp());
 }
 

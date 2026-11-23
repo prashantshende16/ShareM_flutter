@@ -542,4 +542,27 @@ class ApiService {
     }
     throw Exception('Failed to save surge setting: ${response.statusCode}');
   }
+
+  /// Register FCM device token for mobile push notifications
+  Future<Map<String, dynamic>> registerFCMToken(String token, {String deviceName = 'Android Device'}) async {
+    try {
+      final response = await _safePost(
+        '/notifications/register-token',
+        body: {'fcm_token': token, 'device_name': deviceName, 'platform': 'android'},
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+    } catch (_) {}
+    return {'status': 'ignored'};
+  }
+
+  /// Reset surge notification count
+  Future<Map<String, dynamic>> resetSurgeNotifications() async {
+    final response = await _safePost('/market/surge-radar/reset-notifications');
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Failed to reset surge notifications: ${response.statusCode}');
+  }
 }
